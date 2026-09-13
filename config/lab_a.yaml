@@ -1,0 +1,8 @@
+environment: lab_a
+dut:
+  ip: 192.168.1.10
+  username: admin
+wlan:
+  ssid: WLAN_LAB_A
+  channel: 36
+  supports_6ghz: true
