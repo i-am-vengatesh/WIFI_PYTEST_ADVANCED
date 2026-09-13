@@ -6,7 +6,24 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 bat '''
-                    "D:\\vengatesh\\Python\\Pytest\\Projects\\WIFI_PYTEST_ADVANCED\\venv\\Scripts\\python.exe" --version
+                    python --version
+                '''
+            }
+        }
+
+        stage('Create Virtual Environment') {
+            steps {
+                bat '''
+                    python -m venv venv
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                bat '''
+                    venv\\Scripts\\python.exe -m pip install --upgrade pip
+                    venv\\Scripts\\python.exe -m pip install -r requirements.txt
                 '''
             }
         }
@@ -14,19 +31,7 @@ pipeline {
         stage('Run Pytest') {
             steps {
                 bat '''
-                    cd /d D:\\vengatesh\\Python\\Pytest\\Projects\\WIFI_PYTEST_ADVANCED
-
-                    "D:\\vengatesh\\Python\\Pytest\\Projects\\WIFI_PYTEST_ADVANCED\\venv\\Scripts\\python.exe" -m pytest -v --html=reports/wlan_test_report.html --self-contained-html
-                '''
-            }
-        }
-
-        stage('Copy Report') {
-            steps {
-                bat '''
-                    if not exist reports mkdir reports
-
-                    copy /Y "D:\\vengatesh\\Python\\Pytest\\Projects\\WIFI_PYTEST_ADVANCED\\reports\\wlan_test_report.html" "%WORKSPACE%\\reports\\wlan_test_report.html"
+                    venv\\Scripts\\python.exe -m pytest -v --html=reports\\wlan_test_report.html --self-contained-html
                 '''
             }
         }
