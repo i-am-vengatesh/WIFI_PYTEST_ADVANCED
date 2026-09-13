@@ -6,7 +6,7 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 bat '''
-                    python --version
+                    "C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe" --version
                 '''
             }
         }
@@ -14,7 +14,7 @@ pipeline {
         stage('Create Virtual Environment') {
             steps {
                 bat '''
-                    python -m venv venv
+                    "C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe" -m venv venv
                 '''
             }
         }
