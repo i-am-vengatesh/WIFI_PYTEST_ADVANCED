@@ -61,10 +61,18 @@ environment {
     }
 
     post {
-        always {
-            junit 'reports/junit-results.xml'
+    always {
+        junit 'reports/junit-results.xml'
 
-            archiveArtifacts artifacts: 'reports/*.html', fingerprint: true
-        }
+        archiveArtifacts artifacts: 'reports/*.html', fingerprint: true
     }
+
+    success {
+        echo 'WLAN validation pipeline completed successfully.'
+    }
+
+    failure {
+        echo 'WLAN validation pipeline failed. Review Jenkins test results and reports.'
+    }
+}
 }
