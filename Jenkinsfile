@@ -82,15 +82,17 @@ environment {
         }
     }
 
-    post {
+   post {
     always {
         junit 'reports/junit-results.xml'
 
         archiveArtifacts(
-    artifacts: 'reports/*.xml,reports/*.html,reports/*.log',
-    fingerprint: true,
-    allowEmptyArchive: true
-)
+            artifacts: 'reports/*.xml,reports/*.html,reports/*.log',
+            fingerprint: true,
+            allowEmptyArchive: true
+        )
+
+        cleanWs()
     }
 
     success {
