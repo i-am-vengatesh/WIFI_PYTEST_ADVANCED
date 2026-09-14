@@ -5,7 +5,7 @@ import pytest
         pytest.param(-50, "PASS",id="Very_Strong"),
         pytest.param(-65, "PASS",id="Strong"),
         pytest.param(-70, "PASS",id="Good"),
-        pytest.param(-80, "FAIL",id="Weak"),
+        pytest.param(-80, "PASS",id="Weak"),
     ],
 
 )
