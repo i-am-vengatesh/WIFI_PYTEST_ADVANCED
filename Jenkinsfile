@@ -5,9 +5,16 @@ pipeline {
     agent any
 
     options {
+    skipDefaultCheckout(true)
     timestamps()
     timeout(time: 30, unit: 'MINUTES')
     disableConcurrentBuilds()
+    
+}
+stage('Clean Workspace') {
+    steps {
+        cleanWs()
+    }
 }
 environment {
     PYTHON = 'C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe'
