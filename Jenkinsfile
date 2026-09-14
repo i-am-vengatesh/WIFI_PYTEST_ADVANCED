@@ -64,7 +64,11 @@ environment {
     always {
         junit 'reports/junit-results.xml'
 
-        archiveArtifacts artifacts: 'reports/*.html', fingerprint: true
+        archiveArtifacts(
+            artifacts: 'reports/*.html,reports/*.log',
+            fingerprint: true,
+            allowEmptyArchive: true
+        )
     }
 
     success {
