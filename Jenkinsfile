@@ -35,16 +35,12 @@ pipeline {
                 '''
             }
         }
-
-        stage('Publish Test Results') {
-            steps {
-                junit 'reports/junit-results.xml'
-            }
-        }
     }
 
     post {
         always {
+            junit 'reports/junit-results.xml'
+
             archiveArtifacts artifacts: 'reports/*.html', fingerprint: true
         }
     }
