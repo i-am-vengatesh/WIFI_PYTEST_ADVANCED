@@ -31,8 +31,14 @@ pipeline {
         stage('Run Pytest') {
             steps {
                 bat '''
-                    venv\\Scripts\\python.exe -m pytest -v --html=reports\\wlan_test_report.html --self-contained-html
+                    venv\\Scripts\\python.exe -m pytest -v --html=reports\\wlan_test_report.html --self-contained-html --junitxml=reports\\junit-results.xml
                 '''
+            }
+        }
+
+        stage('Publish Test Results') {
+            steps {
+                junit 'reports/junit-results.xml'
             }
         }
     }
