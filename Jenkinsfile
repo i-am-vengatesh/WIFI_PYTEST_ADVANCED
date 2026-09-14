@@ -1,3 +1,6 @@
+def runPython(String args) {
+    bat "venv\\Scripts\\python.exe ${args}"
+}
 pipeline {
     agent any
 
@@ -45,10 +48,10 @@ environment {
 
         stage('Validate Test Environment') {
     steps {
-        bat '''
-            venv\\Scripts\\python.exe --version
-            venv\\Scripts\\python.exe -m pytest --version
-        '''
+        script {
+            runPython("--version")
+            runPython("-m pytest --version")
+        }
     }
 }
 
