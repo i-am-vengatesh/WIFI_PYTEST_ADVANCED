@@ -17,6 +17,10 @@ environment {
         stage('Verify Environment') {
             steps {
                 bat '''
+                    echo Build Number: %BUILD_NUMBER%
+                    echo Job Name: %JOB_NAME%
+                    echo Git Commit: %GIT_COMMIT%
+                    echo Git Branch: %GIT_BRANCH%
                     "%PYTHON%" --version
                 '''
             }
