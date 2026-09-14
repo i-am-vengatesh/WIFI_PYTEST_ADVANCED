@@ -11,11 +11,7 @@ pipeline {
     disableConcurrentBuilds()
     
 }
-stage('Clean Workspace') {
-    steps {
-        cleanWs()
-    }
-}
+
 environment {
     PYTHON = 'C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe'
     HTML_REPORT = 'reports\\wlan_test_report.html'
@@ -23,6 +19,18 @@ environment {
 }
 
     stages {
+
+        stage('Clean Workspace') {
+    steps {
+        cleanWs()
+    }
+}
+
+        stage('Checkout') {
+    steps {
+        checkout scm
+    }
+}
 
         stage('Verify Environment') {
             steps {
