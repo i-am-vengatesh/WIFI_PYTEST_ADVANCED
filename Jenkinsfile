@@ -1,12 +1,23 @@
 pipeline {
     agent any
 
+    options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    disableConcurrentBuilds()
+}
+environment {
+    PYTHON = 'C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe'
+    HTML_REPORT = 'reports\\wlan_test_report.html'
+    JUNIT_REPORT = 'reports\\junit-results.xml'
+}
+
     stages {
 
         stage('Verify Environment') {
             steps {
                 bat '''
-                    "C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe" --version
+                    "%PYTHON%" --version
                 '''
             }
         }
@@ -14,7 +25,7 @@ pipeline {
         stage('Create Virtual Environment') {
             steps {
                 bat '''
-                    "C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe" -m venv venv
+                    "%PYTHON%" -m venv venv
                 '''
             }
         }
@@ -28,10 +39,22 @@ pipeline {
             }
         }
 
+        stage('Validate Test Environment') {
+    steps {
+        bat '''
+            venv\\Scripts\\python.exe --version
+            venv\\Scripts\\python.exe -m pytest --version
+        '''
+    }
+}
+
         stage('Run Pytest') {
             steps {
                 bat '''
-                    venv\\Scripts\\python.exe -m pytest -v --html=reports\\wlan_test_report.html --self-contained-html --junitxml=reports\\junit-results.xml
+                    venv\\Scripts\\python.exe -m pytest -v ^
+              --html=%HTML_REPORT% ^
+              --self-contained-html ^
+              --junitxml=%JUNIT_REPORT%
                 '''
             }
         }
