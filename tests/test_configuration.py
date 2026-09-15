@@ -1,9 +1,11 @@
 import pytest
 @pytest.mark.wlan
+@pytest.mark.regression
 def test_environment_loaded(wlan_config):
     environment = wlan_config.get_environment()
     assert environment in ["lab_a", "lab_b"]
 @pytest.mark.wlan
+@pytest.mark.regression
 def test_wlan_configuration(wlan_config):
     environment = wlan_config.get_environment()
     if environment == "lab_a":
@@ -21,6 +23,7 @@ def test_wlan_configuration(wlan_config):
     assert channel in [36, 149]
 
 @pytest.mark.wlan
+@pytest.mark.regression
 def test_dut_configuration(wlan_config):
     environment = wlan_config.get_environment()
     if environment == "lab_a":

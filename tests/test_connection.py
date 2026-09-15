@@ -1,5 +1,6 @@
 import pytest
 @pytest.mark.wlan
+@pytest.mark.smoke
 def test_wifi_connection(connected_wlan, wlan_config):
     
     assert connected_wlan.connected is True
@@ -7,6 +8,7 @@ def test_wifi_connection(connected_wlan, wlan_config):
     assert connected_wlan.get_channel() == wlan_config.get_channel()
 
 @pytest.mark.wlan
+@pytest.mark.smoke
 def test_wifi_disconnection(connected_wlan):
     
     result = connected_wlan.disconnect()

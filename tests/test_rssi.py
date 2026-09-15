@@ -1,5 +1,6 @@
 import pytest
 @pytest.mark.wlan
+@pytest.mark.regression
 @pytest.mark.parametrize(
     "rssi,expected",[
         pytest.param(-50, "PASS",id="Very_Strong"),
