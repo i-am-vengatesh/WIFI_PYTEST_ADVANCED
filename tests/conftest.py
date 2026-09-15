@@ -1,8 +1,17 @@
+import os
 import pytest
 from pathlib import Path
-from framework.logger import logger
+from framework.logger import (
+    logger,
+    set_environment,
+    set_test_name,
+    set_build_number,
+)
 from framework.wlan_device import WLANDevice
 from framework.wlan_config import WLANConfig
+
+def pytest_runtest_setup(item):
+    set_test_name(item.name)
 
 """
 Make the framework configurable from the command line:
@@ -24,6 +33,9 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def wlan_config(request):
      environment = request.config.getoption("--env")
+     set_environment(environment)
+     build_number = os.getenv("BUILD_NUMBER", "LOCAL")
+     set_build_number(build_number)
      config_file = (
         Path(__file__).parent.parent
         / "config"
@@ -93,3 +105,4 @@ def connected_wlan(clean_wlan_device):
     yield clean_wlan_device
     logger.info("DISCONNECT: Disconnecting WLAN device")
     clean_wlan_device.disconnect()
+

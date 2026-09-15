@@ -73,7 +73,8 @@ environment {
         stage('Run Pytest') {
             steps {
                 bat '''
-                    venv\\Scripts\\python.exe -m pytest -v ^
+                venv\\Scripts\\python.exe -m pytest -v ^
+              --env=lab_a ^
               --html=%HTML_REPORT% ^
               --self-contained-html ^
               --junitxml=%JUNIT_REPORT%
