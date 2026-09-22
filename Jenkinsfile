@@ -111,6 +111,35 @@ pipeline {
             }
         }
 
+        stage('Run Pytest in Kubernetes') {
+            steps {
+                bat '''
+                    echo ===== Applying Kubernetes Job =====
+                    kubectl apply -f k8s\\wifi-pytest-job-generated.yaml
+
+                    echo.
+                    echo ===== Kubernetes Job =====
+                    kubectl get job wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Waiting for Job Completion =====
+                    kubectl wait --for=condition=complete job/wifi-pytest-job-%BUILD_NUMBER% --timeout=5m
+
+                    echo.
+                    echo ===== Job Status =====
+                    kubectl get job wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Pod Status =====
+                    kubectl get pods -l job-name=wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Pytest Logs =====
+                    kubectl logs job/wifi-pytest-job-%BUILD_NUMBER%
+                '''
+            }
+        }
+
         stage('Verify Environment') {
             steps {
                 bat '''
