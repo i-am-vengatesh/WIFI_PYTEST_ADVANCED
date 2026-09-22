@@ -232,10 +232,10 @@ pipeline {
 
     post {
         always {
-            junit 'reports/junit-results.xml'
+            junit 'reports/k8s/junit-results-k8s.xml'
 
             archiveArtifacts(
-                artifacts: 'reports/*.xml,reports/*.html,reports/*.log',
+                artifacts: 'reports/k8s/*.xml,reports/k8s/*.html,reports/*.log',
                 fingerprint: true,
                 allowEmptyArchive: true
             )
