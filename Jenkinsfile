@@ -81,7 +81,7 @@ stage('Load Docker Image into Kind') {
     steps {
         bat '''
             echo ===== Loading Image into Kind =====
-            kind load docker-image wifi-pytest-advanced:%BUILD_NUMBER%
+            "C:\Users\USER\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\kind.exe" load docker-image wifi-pytest-advanced:%BUILD_NUMBER%
 
             echo.
             echo ===== Verify Image in Kind =====
@@ -102,10 +102,6 @@ stage('Prepare Kubernetes Job') {
         '''
     }
 }
-
-
-
-
         stage('Verify Environment') {
             steps {
                 bat '''
