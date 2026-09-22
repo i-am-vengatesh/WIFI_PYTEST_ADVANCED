@@ -140,59 +140,6 @@ pipeline {
             }
         }
 
-        stage('Verify Environment') {
-            steps {
-                bat '''
-                    echo Build Number: %BUILD_NUMBER%
-                    echo Job Name: %JOB_NAME%
-                    echo Git Commit: %GIT_COMMIT%
-                    echo Git Branch: %GIT_BRANCH%
-
-                    echo.
-                    echo ===== Python Version =====
-                    "%PYTHON%" --version
-                '''
-            }
-        }
-
-        stage('Create Virtual Environment') {
-            steps {
-                bat '''
-                    "%PYTHON%" -m venv venv
-                '''
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                bat '''
-                    venv\\Scripts\\python.exe -m pip install --upgrade pip
-                    venv\\Scripts\\python.exe -m pip install -r requirements.txt
-                '''
-            }
-        }
-
-        stage('Validate Test Environment') {
-            steps {
-                script {
-                    runPython("--version")
-                    runPython("-m pytest --version")
-                }
-            }
-        }
-
-        stage('Run Pytest') {
-            steps {
-                bat '''
-                    venv\\Scripts\\python.exe -m pytest -v -s ^
-                        --env=lab_a ^
-                        --html=%HTML_REPORT% ^
-                        --self-contained-html ^
-                        --junitxml=%JUNIT_REPORT%
-                '''
-            }
-        }
-
         stage('Collect Kubernetes Reports') {
     steps {
         bat '''
