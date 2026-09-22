@@ -6,3 +6,4 @@ reports/*.html
 reports/*.log
 
 Jenkinsfile_backup
+reports/

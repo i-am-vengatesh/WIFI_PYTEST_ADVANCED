@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: reports-reader
+spec:
+  containers:
+    - name: reader
+      image: busybox
+      command: ["sleep", "3600"]
+      volumeMounts:
+        - name: reports-volume
+          mountPath: /app/reports
+  volumes:
+    - name: reports-volume
+      persistentVolumeClaim:
+        claimName: wifi-pytest-reports-pvc
+  restartPolicy: Never
