@@ -32,18 +32,6 @@ environment {
     }
 }
 
-stage('Prepare Kubernetes Job') {
-    steps {
-        bat '''
-            echo Preparing Kubernetes Job for Build %BUILD_NUMBER%
-
-            powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: wifi-pytest-job-%BUILD_NUMBER%' -replace 'image: wifi-pytest-advanced:1.0', 'image: wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content k8s\\wifi-pytest-job-generated.yaml"
-
-            echo Generated Kubernetes Job:
-            type k8s\\wifi-pytest-job-generated.yaml
-        '''
-    }
-}
 stage('Verify Kubernetes') {
     steps {
         bat '''
@@ -76,6 +64,47 @@ stage('Verify Kubernetes') {
         '''
     }
 }
+stage('Build Docker Image') {
+    steps {
+        bat '''
+            echo ===== Building Docker Image =====
+            docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
+
+            echo.
+            echo ===== Docker Image =====
+            docker images wifi-pytest-advanced
+        '''
+    }
+}
+
+stage('Load Docker Image into Kind') {
+    steps {
+        bat '''
+            echo ===== Loading Image into Kind =====
+            kind load docker-image wifi-pytest-advanced:%BUILD_NUMBER%
+
+            echo.
+            echo ===== Verify Image in Kind =====
+            docker exec kind-control-plane crictl images | findstr wifi-pytest-advanced
+        '''
+    }
+}
+
+stage('Prepare Kubernetes Job') {
+    steps {
+        bat '''
+            echo Preparing Kubernetes Job for Build %BUILD_NUMBER%
+
+            powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: wifi-pytest-job-%BUILD_NUMBER%' -replace 'image: wifi-pytest-advanced:1.0', 'image: wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content k8s\\wifi-pytest-job-generated.yaml"
+
+            echo Generated Kubernetes Job:
+            type k8s\\wifi-pytest-job-generated.yaml
+        '''
+    }
+}
+
+
+
 
         stage('Verify Environment') {
             steps {
