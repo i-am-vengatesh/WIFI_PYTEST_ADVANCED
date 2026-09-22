@@ -192,6 +192,42 @@ pipeline {
                 '''
             }
         }
+
+        stage('Collect Kubernetes Reports') {
+    steps {
+        bat '''
+            echo ===== Creating Report Reader Pod =====
+
+            powershell -Command "(Get-Content k8s\\reports-reader.yaml) -replace 'name: reports-reader', 'name: reports-reader-%BUILD_NUMBER%' | Set-Content k8s\\reports-reader-generated.yaml"
+
+            kubectl apply -f k8s\\reports-reader-generated.yaml
+
+            echo.
+            echo ===== Waiting for Reader Pod =====
+            kubectl wait --for=condition=Ready pod/reports-reader-%BUILD_NUMBER% --timeout=60s
+
+            echo.
+            echo ===== Creating Jenkins Report Directory =====
+            if not exist reports\\k8s mkdir reports\\k8s
+
+            echo.
+            echo ===== Copying Kubernetes JUnit Report =====
+            kubectl cp reports-reader-%BUILD_NUMBER%:/app/reports/junit-results.xml reports\\k8s\\junit-results-k8s.xml
+
+            echo.
+            echo ===== Copying Kubernetes HTML Report =====
+            kubectl cp reports-reader-%BUILD_NUMBER%:/app/reports/wlan_test_report.html reports\\k8s\\wlan_test_report-k8s.html
+
+            echo.
+            echo ===== Kubernetes Reports Retrieved =====
+            dir reports\\k8s
+
+            echo.
+            echo ===== Deleting Temporary Reader Pod =====
+            kubectl delete pod reports-reader-%BUILD_NUMBER% --ignore-not-found
+        '''
+    }
+}
     }
 
     post {
