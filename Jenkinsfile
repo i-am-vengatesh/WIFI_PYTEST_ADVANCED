@@ -32,6 +32,36 @@ environment {
     }
 }
 
+stage('Prepare Kubernetes Job') {
+    steps {
+        bat '''
+            echo Preparing Kubernetes Job for Build %BUILD_NUMBER%
+
+            powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: wifi-pytest-job-%BUILD_NUMBER%' -replace 'image: wifi-pytest-advanced:1.0', 'image: wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content k8s\\wifi-pytest-job-generated.yaml"
+
+            echo Generated Kubernetes Job:
+            type k8s\\wifi-pytest-job-generated.yaml
+        '''
+    }
+}
+stage('Verify Kubernetes') {
+    steps {
+        bat '''
+            echo ===== Kubernetes Version =====
+            kubectl version --client
+
+            echo ===== Kubernetes Context =====
+            kubectl config current-context
+
+            echo ===== Kubernetes Cluster =====
+            kubectl cluster-info
+
+            echo ===== Kubernetes Nodes =====
+            kubectl get nodes
+        '''
+    }
+}
+
         stage('Verify Environment') {
             steps {
                 bat '''
