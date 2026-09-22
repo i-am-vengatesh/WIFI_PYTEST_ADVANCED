@@ -47,15 +47,30 @@ stage('Prepare Kubernetes Job') {
 stage('Verify Kubernetes') {
     steps {
         bat '''
-            echo ===== Kubernetes Version =====
+            echo ===== Jenkins Windows User =====
+            whoami
+
+            echo.
+            echo ===== USERPROFILE =====
+            echo %USERPROFILE%
+
+            echo.
+            echo ===== KUBECONFIG =====
+            echo %KUBECONFIG%
+
+            echo.
+            echo ===== Kubernetes Client =====
             kubectl version --client
 
+            echo.
             echo ===== Kubernetes Context =====
             kubectl config current-context
 
-            echo ===== Kubernetes Cluster =====
-            kubectl cluster-info
+            echo.
+            echo ===== Kubernetes Contexts =====
+            kubectl config get-contexts
 
+            echo.
             echo ===== Kubernetes Nodes =====
             kubectl get nodes
         '''
