@@ -34,6 +34,31 @@ pipeline {
             }
         }
 
+        stage('Test GitOps Repository Access') {
+    steps {
+        dir('gitops-test') {
+            git(
+                branch: 'main',
+                credentialsId: 'github-gitops-creds',
+                url: 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
+            )
+
+            bat '''
+                echo ===== GitOps Repository =====
+                git remote -v
+
+                echo.
+                echo ===== Latest GitOps Commit =====
+                git log -1 --oneline
+
+                echo.
+                echo ===== GitOps Files =====
+                dir
+            '''
+        }
+    }
+}
+
         stage('Verify Kubernetes') {
             steps {
                 bat '''
