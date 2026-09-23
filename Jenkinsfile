@@ -211,116 +211,107 @@ pipeline {
         // 7. Update GitOps Repository
         // ============================================================
         stage('Update GitOps Repository') {
-            steps {
+    steps {
 
-                dir('gitops-repo') {
+        dir('gitops-repo') {
 
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[
-                            url: "${GITOPS_REPO}",
-                            credentialsId: "${GITOPS_CREDENTIALS}"
-                        ]]
-                    ])
+            checkout([
+                $class: 'GitSCM',
+                branches: [[name: '*/main']],
+                userRemoteConfigs: [[
+                    url: "${GITOPS_REPO}",
+                    credentialsId: "${GITOPS_CREDENTIALS}"
+                ]]
+            ])
 
-                    bat '''
+            bat '''
+                echo.
+                echo ==========================================
+                echo GitOps Repository Before Update
+                echo ==========================================
+                git log -1 --oneline
+
+                echo.
+                echo ==========================================
+                echo Updating Kubernetes Manifest
+                echo ==========================================
+
+                powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content 'k8s\\pytest-job.yaml') -replace 'wifi-pytest-job-[0-9]+', 'wifi-pytest-job-%BUILD_NUMBER%' -replace 'vengateshbabu1605/wifi-pytest-advanced:[0-9]+', 'vengateshbabu1605/wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content 'k8s\\pytest-job.yaml'"
+
+                if errorlevel 1 (
+                    echo ERROR: Failed to update Kubernetes manifest
+                    exit /b 1
+                )
+
+                echo.
+                echo ==========================================
+                echo Updated Manifest
+                echo ==========================================
+
+                type k8s\\pytest-job.yaml
+
+                echo.
+                echo ==========================================
+                echo Git Commit
+                echo ==========================================
+
+                git config user.name "Jenkins CI"
+                git config user.email "jenkins@localhost"
+
+                git add k8s\\pytest-job.yaml
+
+                git commit -m "Update Pytest image to build %BUILD_NUMBER%"
+            '''
+
+            withCredentials([
+                usernamePassword(
+                    credentialsId: "${GITOPS_CREDENTIALS}",
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )
+            ]) {
+
+                bat '''
+                    echo.
+                    echo ==========================================
+                    echo Pushing GitOps Changes
+                    echo ==========================================
+
+                    set "GIT_ASKPASS=%WORKSPACE%\\git-askpass.bat"
+
+                    (
+                        echo @echo off
+                        echo echo %%~1 ^| findstr /I "Username" ^>nul
+                        echo if not errorlevel 1 ^(
+                        echo     echo %%GIT_USERNAME%%
+                        echo     exit /b 0
+                        echo ^)
+                        echo echo %%GIT_PASSWORD%%
+                    ) > "%GIT_ASKPASS%"
+
+                    git push origin HEAD:main
+
+                    set "PUSH_RESULT=%ERRORLEVEL%"
+
+                    del "%GIT_ASKPASS%" >nul 2>&1
+
+                    if not "%PUSH_RESULT%"=="0" (
                         echo.
                         echo ==========================================
-                        echo GitOps Repository Before Update
+                        echo GitOps Push FAILED
                         echo ==========================================
-                        git log -1 --oneline
+                        exit /b %PUSH_RESULT%
+                    )
 
-                        echo.
-                        echo ==========================================
-                        echo Updating Kubernetes Manifest
-                        echo ==========================================
-
-                        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-                        "(Get-Content 'k8s\\pytest-job.yaml') ^
-                        -replace 'wifi-pytest-job-[0-9]+', 'wifi-pytest-job-%BUILD_NUMBER%' ^
-                        -replace 'vengateshbabu1605/wifi-pytest-advanced:[0-9]+', 'vengateshbabu1605/wifi-pytest-advanced:%BUILD_NUMBER%' ^
-                        | Set-Content 'k8s\\pytest-job.yaml'"
-
-                        echo.
-                        echo ==========================================
-                        echo Updated Manifest
-                        echo ==========================================
-
-                        type k8s\\pytest-job.yaml
-
-                        echo.
-                        echo ==========================================
-                        echo Git Commit
-                        echo ==========================================
-
-                        git config user.name "Jenkins CI"
-                        git config user.email "jenkins@localhost"
-
-                        git add k8s\\pytest-job.yaml
-
-                        git commit -m "Update Pytest image to build %BUILD_NUMBER%"
-                    '''
-
-                    // ------------------------------------------------
-                    // IMPORTANT:
-                    // Do NOT use:
-                    //
-                    // git push https://username:password@github.com/...
-                    //
-                    // Use GIT_ASKPASS so the PAT is not placed
-                    // directly in the Git command.
-                    // ------------------------------------------------
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: "${GITOPS_CREDENTIALS}",
-                            usernameVariable: 'GIT_USERNAME',
-                            passwordVariable: 'GIT_PASSWORD'
-                        )
-                    ]) {
-
-                        bat '''
-                            echo.
-                            echo ==========================================
-                            echo Pushing GitOps Changes
-                            echo ==========================================
-
-                            set "GIT_ASKPASS=%WORKSPACE%\\git-askpass.bat"
-
-                            (
-                                echo @echo off
-                                echo echo %%~1 ^| findstr /I "Username" ^>nul
-                                echo if not errorlevel 1 ^(
-                                echo     echo %%GIT_USERNAME%%
-                                echo     exit /b 0
-                                echo ^)
-                                echo echo %%GIT_PASSWORD%%
-                            ) > "%GIT_ASKPASS%"
-
-                            git push origin HEAD:main
-
-                            set "PUSH_RESULT=%ERRORLEVEL%"
-
-                            del "%GIT_ASKPASS%" >nul 2>&1
-
-                            if not "%PUSH_RESULT%"=="0" (
-                                echo.
-                                echo ==========================================
-                                echo GitOps Push FAILED
-                                echo ==========================================
-                                exit /b %PUSH_RESULT%
-                            )
-
-                            echo.
-                            echo ==========================================
-                            echo GitOps Push Successful
-                            echo ==========================================
-                        '''
-                    }
-                }
+                    echo.
+                    echo ==========================================
+                    echo GitOps Push Successful
+                    echo ==========================================
+                '''
             }
         }
+    }
+}
 
         // ============================================================
         // 8. Load Docker Image into Kind
