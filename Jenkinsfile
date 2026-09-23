@@ -68,17 +68,45 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-            steps {
-                bat '''
-                    echo ===== Building Docker Image =====
-                    docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
+    steps {
+        bat '''
+            echo ===== Building Docker Image =====
+            docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
 
-                    echo.
-                    echo ===== Docker Image =====
-                    docker images wifi-pytest-advanced
-                '''
-            }
+            echo.
+            echo ===== Docker Image =====
+            docker images wifi-pytest-advanced
+        '''
+    }
+}
+
+stage('Push Docker Image') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USERNAME',
+                passwordVariable: 'DOCKER_PASSWORD'
+            )
+        ]) {
+            bat '''
+                echo ===== Logging in to Docker Hub =====
+                docker login -u "%DOCKER_USERNAME%" -p "%DOCKER_PASSWORD%"
+
+                echo.
+                echo ===== Tagging Docker Image =====
+                docker tag wifi-pytest-advanced:%BUILD_NUMBER% %DOCKER_USERNAME%/wifi-pytest-advanced:%BUILD_NUMBER%
+
+                echo.
+                echo ===== Pushing Docker Image =====
+                docker push %DOCKER_USERNAME%/wifi-pytest-advanced:%BUILD_NUMBER%
+
+                echo.
+                echo ===== Docker Image Push Complete =====
+            '''
         }
+    }
+}
 
         stage('Load Docker Image into Kind') {
             steps {
