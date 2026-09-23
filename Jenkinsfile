@@ -11,40 +11,28 @@ pipeline {
 
     environment {
 
-        // ============================================================
-        // Application / Docker
-        // ============================================================
-        DOCKER_IMAGE     = 'wifi-pytest-advanced'
-        DOCKER_HUB_IMAGE = 'vengateshbabu1605/wifi-pytest-advanced'
+    DOCKER_IMAGE     = 'wifi-pytest-advanced'
+    DOCKER_HUB_IMAGE = 'vengateshbabu1605/wifi-pytest-advanced'
 
-        // ============================================================
-        // Kubernetes / Kind
-        // ============================================================
-        KIND_CLUSTER  = 'kind'
-        K8S_NAMESPACE = 'default'
+    KIND_CLUSTER  = 'kind'
+    K8S_NAMESPACE = 'default'
 
-        // Explicit Windows executable paths
-        KIND_EXE   = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
-        KUBECTL_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe'
-        DOCKER_EXE  = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
+    KIND_EXE = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
 
-        // ============================================================
-        // GitOps
-        // ============================================================
-        GITOPS_REPO        = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
-        GITOPS_CREDENTIALS = 'github-gitops-creds'
+    KUBECTL_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe'
+    DOCKER_EXE  = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
 
-        // ============================================================
-        // Kubernetes Job
-        // ============================================================
-        K8S_JOB_NAME = "wifi-pytest-job-${BUILD_NUMBER}"
+    // Jenkins-specific Kubernetes configuration
+    KUBECONFIG = 'C:\\ProgramData\\Jenkins\\.kube\\config'
 
-        // ============================================================
-        // Reports
-        // ============================================================
-        HTML_REPORT = 'reports\\wlan_test_report.html'
-        JUNIT_REPORT = 'reports\\junit-results.xml'
-    }
+    GITOPS_REPO        = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
+    GITOPS_CREDENTIALS = 'github-gitops-creds'
+
+    K8S_JOB_NAME = "wifi-pytest-job-${BUILD_NUMBER}"
+
+    HTML_REPORT  = 'reports\\wlan_test_report.html'
+    JUNIT_REPORT = 'reports\\junit-results.xml'
+}
 
     stages {
 
