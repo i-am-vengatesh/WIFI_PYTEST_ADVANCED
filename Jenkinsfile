@@ -1,16 +1,23 @@
+def runPython(String args) {
+    bat "venv\\Scripts\\python.exe ${args}"
+}
+
 pipeline {
     agent any
 
     options {
+        skipDefaultCheckout(true)
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
     }
 
     environment {
-        IMAGE_NAME = 'wifi-pytest-advanced'
-        HTML_REPORT = 'reports/wlan_test_report.html'
-        JUNIT_REPORT = 'reports/junit-results.xml'
+        PYTHON = 'C:\\Users\\USER\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe'
+        KIND = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
+
+        HTML_REPORT = 'reports\\wlan_test_report.html'
+        JUNIT_REPORT = 'reports\\junit-results.xml'
     }
 
     stages {
@@ -27,23 +34,35 @@ pipeline {
             }
         }
 
-        stage('Verify Environment') {
+        stage('Verify Kubernetes') {
             steps {
                 bat '''
-                    echo ===== Jenkins Environment =====
+                    echo ===== Jenkins Windows User =====
                     whoami
 
                     echo.
-                    echo ===== Git Version =====
-                    git --version
+                    echo ===== USERPROFILE =====
+                    echo %USERPROFILE%
 
                     echo.
-                    echo ===== Docker Version =====
-                    docker --version
+                    echo ===== KUBECONFIG =====
+                    echo %KUBECONFIG%
 
                     echo.
-                    echo ===== Python Version =====
-                    python --version
+                    echo ===== Kubernetes Client =====
+                    kubectl version --client
+
+                    echo.
+                    echo ===== Kubernetes Context =====
+                    kubectl config current-context
+
+                    echo.
+                    echo ===== Kubernetes Contexts =====
+                    kubectl config get-contexts
+
+                    echo.
+                    echo ===== Kubernetes Nodes =====
+                    kubectl get nodes
                 '''
             }
         }
@@ -52,104 +71,131 @@ pipeline {
             steps {
                 bat '''
                     echo ===== Building Docker Image =====
-                    docker build -t %IMAGE_NAME%:%BUILD_NUMBER% .
+                    docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
 
                     echo.
-                    echo ===== Docker Image Created =====
-                    docker images %IMAGE_NAME%
+                    echo ===== Docker Image =====
+                    docker images wifi-pytest-advanced
                 '''
             }
         }
 
-        stage('Run Pytest in Docker') {
-            steps {
-                script {
-                    catchError(
-                        buildResult: 'FAILURE',
-                        stageResult: 'FAILURE'
-                    ) {
-                        bat '''
-                            echo ===== Creating Reports Directory =====
-                            if not exist reports mkdir reports
-
-                            echo.
-                            echo ===== Running Pytest Inside Docker =====
-
-                            docker run --rm ^
-                              -v "%WORKSPACE%\\reports:/app/reports" ^
-                              %IMAGE_NAME%:%BUILD_NUMBER% ^
-                              python -m pytest -v -s ^
-                              --html=/app/reports/wlan_test_report.html ^
-                              --self-contained-html ^
-                              --junitxml=/app/reports/junit-results.xml
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Verify Test Reports') {
+        stage('Load Docker Image into Kind') {
             steps {
                 bat '''
-                    echo ===== Test Reports =====
-
-                    if exist reports\\junit-results.xml (
-                        echo JUnit XML found
-                    ) else (
-                        echo ERROR: JUnit XML not found
-                        exit /b 1
-                    )
-
-                    if exist reports\\wlan_test_report.html (
-                        echo HTML report found
-                    ) else (
-                        echo ERROR: HTML report not found
-                        exit /b 1
-                    )
+                    echo ===== Kind Executable =====
+                    "%KIND%" version
 
                     echo.
-                    echo ===== Report Files =====
-                    dir reports
+                    echo ===== Loading Image into Kind =====
+                    "%KIND%" load docker-image wifi-pytest-advanced:%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Verify Image in Kind =====
+                    docker exec kind-control-plane crictl images | findstr wifi-pytest-advanced
                 '''
             }
         }
 
-        stage('Publish JUnit Results') {
+        stage('Prepare Kubernetes Job') {
             steps {
-                junit(
-                    testResults: 'reports/junit-results.xml',
-                    allowEmptyResults: false
-                )
+                bat '''
+                    echo Preparing Kubernetes Job for Build %BUILD_NUMBER%
+
+                    powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: wifi-pytest-job-%BUILD_NUMBER%' -replace 'image: wifi-pytest-advanced:1.0', 'image: wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content k8s\\wifi-pytest-job-generated.yaml"
+
+                    echo.
+                    echo ===== Generated Kubernetes Job =====
+                    type k8s\\wifi-pytest-job-generated.yaml
+                '''
             }
         }
+
+        stage('Run Pytest in Kubernetes') {
+            steps {
+                bat '''
+                    echo ===== Applying Kubernetes Job =====
+                    kubectl apply -f k8s\\wifi-pytest-job-generated.yaml
+
+                    echo.
+                    echo ===== Kubernetes Job =====
+                    kubectl get job wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Waiting for Job Completion =====
+                    kubectl wait --for=condition=complete job/wifi-pytest-job-%BUILD_NUMBER% --timeout=5m
+
+                    echo.
+                    echo ===== Job Status =====
+                    kubectl get job wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Pod Status =====
+                    kubectl get pods -l job-name=wifi-pytest-job-%BUILD_NUMBER%
+
+                    echo.
+                    echo ===== Pytest Logs =====
+                    kubectl logs job/wifi-pytest-job-%BUILD_NUMBER%
+                '''
+            }
+        }
+
+        stage('Collect Kubernetes Reports') {
+    steps {
+        bat '''
+            echo ===== Creating Report Reader Pod =====
+
+            powershell -Command "(Get-Content k8s\\reports-reader.yaml) -replace 'name: reports-reader', 'name: reports-reader-%BUILD_NUMBER%' | Set-Content k8s\\reports-reader-generated.yaml"
+
+            kubectl apply -f k8s\\reports-reader-generated.yaml
+
+            echo.
+            echo ===== Waiting for Reader Pod =====
+            kubectl wait --for=condition=Ready pod/reports-reader-%BUILD_NUMBER% --timeout=60s
+
+            echo.
+            echo ===== Creating Jenkins Report Directory =====
+            if not exist reports\\k8s mkdir reports\\k8s
+
+            echo.
+            echo ===== Copying Kubernetes JUnit Report =====
+            kubectl cp reports-reader-%BUILD_NUMBER%:/app/reports/junit-results.xml reports\\k8s\\junit-results-k8s.xml
+
+            echo.
+            echo ===== Copying Kubernetes HTML Report =====
+            kubectl cp reports-reader-%BUILD_NUMBER%:/app/reports/wlan_test_report.html reports\\k8s\\wlan_test_report-k8s.html
+
+            echo.
+            echo ===== Kubernetes Reports Retrieved =====
+            dir reports\\k8s
+
+            echo.
+            echo ===== Deleting Temporary Reader Pod =====
+            kubectl delete pod reports-reader-%BUILD_NUMBER% --ignore-not-found
+        '''
+    }
+}
     }
 
     post {
-
         always {
+            junit 'reports/k8s/junit-results-k8s.xml'
+
             archiveArtifacts(
-                artifacts: 'reports/**',
+                artifacts: 'reports/k8s/*.xml,reports/k8s/*.html,reports/*.log',
+                fingerprint: true,
                 allowEmptyArchive: true
             )
+
+            cleanWs()
         }
 
         success {
-            echo '===== CI PIPELINE PASSED ====='
-            echo 'Docker build completed successfully.'
-            echo 'Pytest completed successfully.'
-            echo 'JUnit and HTML reports were published.'
+            echo 'WLAN validation pipeline completed successfully.'
         }
 
         failure {
-            echo '===== CI PIPELINE FAILED ====='
-            echo 'Check the Pytest console output and JUnit report.'
-        }
-
-        cleanup {
-            bat '''
-                echo ===== Docker Cleanup =====
-                docker image rm %IMAGE_NAME%:%BUILD_NUMBER% || exit /b 0
-            '''
+            echo 'WLAN validation pipeline failed. Review Jenkins test results and reports.'
         }
     }
 }
