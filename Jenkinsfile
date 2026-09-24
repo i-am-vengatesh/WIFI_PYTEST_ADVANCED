@@ -44,7 +44,7 @@ pipeline {
 
         // IMPORTANT:
         // Change this path ONLY if kind.exe is installed somewhere else.
-        KIND_EXE = 'C:\\Program Files\\kind\\kind.exe'
+        KIND_EXE = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
 
         // ============================================================
         // Kubernetes Job
