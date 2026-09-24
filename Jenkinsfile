@@ -34,31 +34,6 @@ pipeline {
             }
         }
 
-        stage('Test GitOps Repository Access') {
-    steps {
-        dir('gitops-test') {
-            git(
-                branch: 'main',
-                credentialsId: 'github-gitops-creds',
-                url: 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
-            )
-
-            bat '''
-                echo ===== GitOps Repository =====
-                git remote -v
-
-                echo.
-                echo ===== Latest GitOps Commit =====
-                git log -1 --oneline
-
-                echo.
-                echo ===== GitOps Files =====
-                dir
-            '''
-        }
-    }
-}
-
         stage('Verify Kubernetes') {
             steps {
                 bat '''
@@ -93,45 +68,17 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-    steps {
-        bat '''
-            echo ===== Building Docker Image =====
-            docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
+            steps {
+                bat '''
+                    echo ===== Building Docker Image =====
+                    docker build -t wifi-pytest-advanced:%BUILD_NUMBER% .
 
-            echo.
-            echo ===== Docker Image =====
-            docker images wifi-pytest-advanced
-        '''
-    }
-}
-
-stage('Push Docker Image') {
-    steps {
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'dockerhub-creds',
-                usernameVariable: 'DOCKER_USERNAME',
-                passwordVariable: 'DOCKER_PASSWORD'
-            )
-        ]) {
-            bat '''
-                echo ===== Logging in to Docker Hub =====
-                docker login -u "%DOCKER_USERNAME%" -p "%DOCKER_PASSWORD%"
-
-                echo.
-                echo ===== Tagging Docker Image =====
-                docker tag wifi-pytest-advanced:%BUILD_NUMBER% %DOCKER_USERNAME%/wifi-pytest-advanced:%BUILD_NUMBER%
-
-                echo.
-                echo ===== Pushing Docker Image =====
-                docker push %DOCKER_USERNAME%/wifi-pytest-advanced:%BUILD_NUMBER%
-
-                echo.
-                echo ===== Docker Image Push Complete =====
-            '''
+                    echo.
+                    echo ===== Docker Image =====
+                    docker images wifi-pytest-advanced
+                '''
+            }
         }
-    }
-}
 
         stage('Load Docker Image into Kind') {
             steps {
@@ -189,6 +136,59 @@ stage('Push Docker Image') {
                     echo.
                     echo ===== Pytest Logs =====
                     kubectl logs job/wifi-pytest-job-%BUILD_NUMBER%
+                '''
+            }
+        }
+
+        stage('Verify Environment') {
+            steps {
+                bat '''
+                    echo Build Number: %BUILD_NUMBER%
+                    echo Job Name: %JOB_NAME%
+                    echo Git Commit: %GIT_COMMIT%
+                    echo Git Branch: %GIT_BRANCH%
+
+                    echo.
+                    echo ===== Python Version =====
+                    "%PYTHON%" --version
+                '''
+            }
+        }
+
+        stage('Create Virtual Environment') {
+            steps {
+                bat '''
+                    "%PYTHON%" -m venv venv
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                bat '''
+                    venv\\Scripts\\python.exe -m pip install --upgrade pip
+                    venv\\Scripts\\python.exe -m pip install -r requirements.txt
+                '''
+            }
+        }
+
+        stage('Validate Test Environment') {
+            steps {
+                script {
+                    runPython("--version")
+                    runPython("-m pytest --version")
+                }
+            }
+        }
+
+        stage('Run Pytest') {
+            steps {
+                bat '''
+                    venv\\Scripts\\python.exe -m pytest -v -s ^
+                        --env=lab_a ^
+                        --html=%HTML_REPORT% ^
+                        --self-contained-html ^
+                        --junitxml=%JUNIT_REPORT%
                 '''
             }
         }
