@@ -408,6 +408,7 @@ pipeline {
        stage('Push GitOps Changes') {
     steps {
         timeout(time: 3, unit: 'MINUTES') {
+
             echo '=========================================='
             echo 'Pushing GitOps Changes'
             echo '=========================================='
@@ -415,9 +416,10 @@ pipeline {
             dir('gitops-repo') {
 
                 withCredentials([
-                    gitUsernamePassword(
+                    usernamePassword(
                         credentialsId: 'github-gitops-creds',
-                        gitToolName: 'git'
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
                     )
                 ]) {
 
@@ -430,6 +432,23 @@ pipeline {
                         git log -1 --oneline
 
                         echo.
+                        echo ===== Preparing GitHub Authentication =====
+
+                        rem Create temporary Git AskPass script
+                        (
+                            echo @echo off
+                            echo if /I "%%~1"=="Username" echo %%GIT_USERNAME%%
+                            echo if /I "%%~1"=="Password" echo %%GIT_PASSWORD%%
+                        ) > git-askpass.cmd
+
+                        rem Tell Git to use Jenkins credentials
+                        set GIT_ASKPASS=%CD%\\git-askpass.cmd
+                        set GIT_TERMINAL_PROMPT=0
+
+                        rem Put username in URL; PAT is supplied through ASKPASS
+                        git remote set-url origin https://%GIT_USERNAME%@github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git
+
+                        echo.
                         echo ===== GitHub Push =====
                         git push origin main
 
@@ -438,6 +457,7 @@ pipeline {
                             echo ==========================================
                             echo Git Push FAILED
                             echo ==========================================
+                            del /q git-askpass.cmd
                             exit /b 1
                         )
 
@@ -445,13 +465,14 @@ pipeline {
                         echo ==========================================
                         echo Git Push SUCCESSFUL
                         echo ==========================================
+
+                        del /q git-askpass.cmd
                     '''
                 }
             }
         }
     }
 }
-
 
         // ============================================================
         // 9. LOAD DOCKER IMAGE INTO KIND
