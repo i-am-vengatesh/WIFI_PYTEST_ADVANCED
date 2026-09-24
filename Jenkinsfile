@@ -15,54 +15,74 @@ pipeline {
         skipDefaultCheckout(true)
     }
 
-    environment {
+    stage('Verify Environment') {
 
-        // ============================================================
-        // Application Repository
-        // ============================================================
-        APP_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_ADVANCED.git'
+    steps {
 
-        // ============================================================
-        // GitOps Repository
-        // ============================================================
-        GITOPS_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
+        echo ''
+        echo '=========================================='
+        echo 'Verify Environment'
+        echo '=========================================='
 
-        // Jenkins credential used for GitOps push
-        GITOPS_CREDENTIALS = 'github-gitops-creds'
+        bat '''
+            @echo off
 
-        // ============================================================
-        // Docker
-        // ============================================================
-        DOCKER_IMAGE = 'wifi-pytest-advanced'
+            echo.
+            echo ===== Docker Version =====
+            docker --version
 
-        // ============================================================
-        // Kubernetes / Kind
-        // ============================================================
-        KIND_CLUSTER = 'kind'
+            echo.
+            echo ===== Kind Version =====
+            "%KIND_EXE%" version
 
-        K8S_NAMESPACE = 'default'
+            if errorlevel 1 (
+                echo.
+                echo ERROR: Kind executable could not be executed.
+                echo KIND_EXE=%KIND_EXE%
+                exit /b 1
+            )
 
-        // IMPORTANT:
-        // Change this path ONLY if kind.exe is installed somewhere else.
-        KIND_EXE = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
+            echo.
+            echo ===== Kubectl Version =====
+            kubectl version --client
 
-        // ============================================================
-        // Kubernetes Job
-        // ============================================================
-        K8S_JOB_BASE = 'wifi-pytest-job'
+            if errorlevel 1 (
+                echo.
+                echo ERROR: kubectl is not available.
+                exit /b 1
+            )
 
-        // ============================================================
-        // GitOps manifest
-        // ============================================================
-        GITOPS_MANIFEST = 'k8s\\pytest-job.yaml'
+            echo.
+            echo ===== Kubernetes Context =====
+            kubectl config current-context
 
-        // ============================================================
-        // Reports
-        // ============================================================
-        JUNIT_REPORT = 'reports\\k8s\\junit-results-k8s.xml'
+            echo.
+            echo ===== Kubernetes Nodes =====
+            kubectl get nodes
 
-        HTML_REPORT = 'reports\\k8s\\wlan_test_report-k8s.html'
+            if errorlevel 1 (
+                echo.
+                echo ERROR: Kubernetes cluster is not accessible.
+                exit /b 1
+            )
+
+            echo.
+            echo ===== Docker Info =====
+            docker info
+
+            if errorlevel 1 (
+                echo.
+                echo ERROR: Docker is not accessible.
+                exit /b 1
+            )
+
+            echo.
+            echo ==========================================
+            echo Environment Verification Successful
+            echo ==========================================
+        '''
     }
+}
 
 
     stages {
