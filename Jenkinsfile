@@ -15,7 +15,96 @@ pipeline {
         skipDefaultCheckout(true)
     }
 
-    stage('Verify Environment') {
+    environment {
+
+        // ============================================================
+        // Application Repository
+        // ============================================================
+        APP_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_ADVANCED.git'
+
+        // ============================================================
+        // GitOps Repository
+        // ============================================================
+        GITOPS_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
+
+        // Jenkins credential used for GitOps push
+        GITOPS_CREDENTIALS = 'github-gitops-creds'
+
+        // ============================================================
+        // Docker
+        // ============================================================
+        DOCKER_IMAGE = 'wifi-pytest-advanced'
+
+        // ============================================================
+        // Kubernetes / Kind
+        // ============================================================
+        KIND_CLUSTER = 'kind'
+
+        K8S_NAMESPACE = 'default'
+
+        // IMPORTANT:
+        // Change this path ONLY if kind.exe is installed somewhere else.
+        KIND_EXE = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
+
+        // ============================================================
+        // Kubernetes Job
+        // ============================================================
+        K8S_JOB_BASE = 'wifi-pytest-job'
+
+        // ============================================================
+        // GitOps manifest
+        // ============================================================
+        GITOPS_MANIFEST = 'k8s\\pytest-job.yaml'
+
+        // ============================================================
+        // Reports
+        // ============================================================
+        JUNIT_REPORT = 'reports\\k8s\\junit-results-k8s.xml'
+
+        HTML_REPORT = 'reports\\k8s\\wlan_test_report-k8s.html'
+    }
+
+
+    stages {
+
+
+        // ============================================================
+        // 1. CHECKOUT APPLICATION SOURCE
+        // ============================================================
+        stage('Checkout Source') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Checkout WIFI_PYTEST_ADVANCED'
+                echo '=========================================='
+
+                checkout scm
+
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Git Version =====
+                    git --version
+
+                    echo.
+                    echo ===== Current Commit =====
+                    git rev-parse HEAD
+
+                    echo.
+                    echo ===== Current Branch =====
+                    git branch --show-current
+                '''
+            }
+        }
+
+
+        // ============================================================
+        // 2. VERIFY ENVIRONMENT
+        // ============================================================
+        stage('Verify Environment') {
 
     steps {
 
@@ -83,89 +172,6 @@ pipeline {
         '''
     }
 }
-
-
-    stages {
-
-
-        // ============================================================
-        // 1. CHECKOUT APPLICATION SOURCE
-        // ============================================================
-        stage('Checkout Source') {
-
-            steps {
-
-                echo ''
-                echo '=========================================='
-                echo 'Checkout WIFI_PYTEST_ADVANCED'
-                echo '=========================================='
-
-                checkout scm
-
-                bat '''
-                    @echo off
-
-                    echo.
-                    echo ===== Git Version =====
-                    git --version
-
-                    echo.
-                    echo ===== Current Commit =====
-                    git rev-parse HEAD
-
-                    echo.
-                    echo ===== Current Branch =====
-                    git branch --show-current
-                '''
-            }
-        }
-
-
-        // ============================================================
-        // 2. VERIFY ENVIRONMENT
-        // ============================================================
-        stage('Verify Environment') {
-
-            steps {
-
-                echo ''
-                echo '=========================================='
-                echo 'Verify Environment'
-                echo '=========================================='
-
-                bat '''
-                    @echo off
-
-                    echo.
-                    echo ===== Docker Version =====
-                    docker --version
-
-                    echo.
-                    echo ===== Kind Version =====
-                    "%KIND_EXE%" version
-
-                    echo.
-                    echo ===== Kubectl Version =====
-                    kubectl version --client
-
-                    echo.
-                    echo ===== Docker Info =====
-                    docker info
-
-                    echo.
-                    echo ===== Kubernetes Context =====
-                    kubectl config current-context
-
-                    echo.
-                    echo ===== Kubernetes Nodes =====
-                    kubectl get nodes
-
-                    echo.
-                    echo ===== Python Version =====
-                    python --version
-                '''
-            }
-        }
 
 
         // ============================================================
