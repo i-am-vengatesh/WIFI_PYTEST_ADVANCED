@@ -406,85 +406,47 @@ pipeline {
         // 8. PUSH GITOPS CHANGES
         // ============================================================
        stage('Push GitOps Changes') {
-
-    options {
-        timeout(time: 3, unit: 'MINUTES')
-    }
-
     steps {
+        timeout(time: 3, unit: 'MINUTES') {
+            echo '=========================================='
+            echo 'Pushing GitOps Changes'
+            echo '=========================================='
 
-        echo ''
-        echo '=========================================='
-        echo 'Pushing GitOps Changes'
-        echo '=========================================='
+            dir('gitops-repo') {
 
-        dir("${GITOPS_DIR}") {
+                withCredentials([
+                    gitUsernamePassword(
+                        credentialsId: 'github-gitops-creds',
+                        gitToolName: 'git'
+                    )
+                ]) {
 
-            withCredentials([
-                usernamePassword(
-                    credentialsId: "${GITOPS_CREDENTIALS}",
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_PASSWORD'
-                )
-            ]) {
+                    bat '''
+                        echo ===== Git Remote =====
+                        git remote -v
 
-                bat '''
-                    @echo off
-                    setlocal EnableExtensions
+                        echo.
+                        echo ===== Local Commit =====
+                        git log -1 --oneline
 
-                    echo.
-                    echo ===== Git Remote =====
-                    git remote -v
+                        echo.
+                        echo ===== GitHub Push =====
+                        git push origin main
 
-                    echo.
-                    echo ===== Local Commit =====
-                    git log -1 --oneline
+                        if errorlevel 1 (
+                            echo.
+                            echo ==========================================
+                            echo Git Push FAILED
+                            echo ==========================================
+                            exit /b 1
+                        )
 
-                    echo.
-                    echo ===== Preparing GitHub Authentication =====
-
-                    set "GIT_TERMINAL_PROMPT=0"
-                    set "GIT_ASKPASS=%CD%\\git-askpass.bat"
-
-                    (
-                        echo @echo off
-                        echo if /I "%%~1"=="Password for 'https://github.com':" goto PASSWORD
-                        echo if /I "%%~1"=="Password for 'https://%%GIT_USERNAME%%@github.com':" goto PASSWORD
-                        echo echo %%GIT_USERNAME%%
-                        echo exit /b 0
-                        echo :PASSWORD
-                        echo echo %%GIT_PASSWORD%%
-                        echo exit /b 0
-                    ) > "%GIT_ASKPASS%"
-
-                    echo.
-                    echo ===== GitHub Push =====
-
-                    git push origin HEAD:%GITOPS_BRANCH%
-
-                    if errorlevel 1 (
                         echo.
                         echo ==========================================
-                        echo Git Push FAILED
+                        echo Git Push SUCCESSFUL
                         echo ==========================================
-                        del /f /q "%GIT_ASKPASS%" >nul 2>&1
-                        exit /b 1
-                    )
-
-                    echo.
-                    echo ==========================================
-                    echo Git Push Successful
-                    echo ==========================================
-
-                    echo.
-                    echo ===== Remote Main After Push =====
-
-                    git ls-remote origin refs/heads/%GITOPS_BRANCH%
-
-                    del /f /q "%GIT_ASKPASS%" >nul 2>&1
-
-                    endlocal
-                '''
+                    '''
+                }
             }
         }
     }
