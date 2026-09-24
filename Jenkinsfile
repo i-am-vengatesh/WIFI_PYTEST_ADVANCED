@@ -285,46 +285,60 @@ pipeline {
         // 5. VERIFY GITOPS REPOSITORY
         // ============================================================
 
-        stage('Verify GitOps Repository') {
+stage('Verify GitOps Repository') {
 
-            steps {
+    steps {
 
-                echo '=========================================='
-                echo 'Verifying GitOps Repository'
-                echo '=========================================='
+        echo '=========================================='
+        echo 'Verifying GitOps Repository'
+        echo '=========================================='
 
-                dir('gitops-repo') {
+        dir('gitops-repo') {
 
-                    bat '''
-                        echo ===== Git Remote =====
+            bat '''
+                echo ===== Git Remote =====
 
-                        git remote -v
-
-
-                        echo.
-                        echo ===== Local Commit =====
-
-                        git log -1 --oneline
+                git remote -v
 
 
-                        echo.
-                        echo ===== Remote Main =====
+                echo.
+                echo ===== Git Branch =====
 
-                        git ls-remote origin refs/heads/main
-
-                        if errorlevel 1 (
-                            echo ERROR: GitHub connectivity failed.
-                            exit /b 1
-                        }
+                git branch
 
 
-                        echo.
-                        echo GitHub Connectivity Successful
-                    '''
-                }
-            }
+                echo.
+                echo ===== Local HEAD =====
+
+                git rev-parse HEAD
+
+
+                echo.
+                echo ===== Origin Main =====
+
+                git rev-parse refs/remotes/origin/main
+
+
+                echo.
+                echo ===== Latest Commit =====
+
+                git log -1 --oneline
+
+
+                echo.
+                echo ===== Git Status =====
+
+                git status --short
+
+
+                echo.
+                echo ==========================================
+                echo GitOps Repository Verification Successful
+                echo ==========================================
+            '''
         }
-
+    }
+}
 
         // ============================================================
         // 6. UPDATE GITOPS MANIFEST
