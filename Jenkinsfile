@@ -3,513 +3,759 @@ pipeline {
     agent any
 
     options {
-        skipDefaultCheckout(true)
         timestamps()
+
+        // Prevent a Git/network problem from occupying Jenkins forever
+        timeout(time: 60, unit: 'MINUTES')
+
+        // Keep only one pipeline execution at a time
         disableConcurrentBuilds()
-        timeout(time: 30, unit: 'MINUTES')
+
+        // Clean workspace before starting
+        skipDefaultCheckout(true)
     }
 
     environment {
 
-    DOCKER_IMAGE     = 'wifi-pytest-advanced'
-    DOCKER_HUB_IMAGE = 'vengateshbabu1605/wifi-pytest-advanced'
+        // ============================================================
+        // Application Repository
+        // ============================================================
+        APP_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_ADVANCED.git'
 
-    KIND_CLUSTER  = 'kind'
-    K8S_NAMESPACE = 'default'
+        // ============================================================
+        // GitOps Repository
+        // ============================================================
+        GITOPS_REPO = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
 
-    KIND_EXE = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Kubernetes.kind_Microsoft.Winget.Source_8wekyb3d8bbwe\\kind.exe'
+        // Jenkins credential used for GitOps push
+        GITOPS_CREDENTIALS = 'github-gitops-creds'
 
-    KUBECTL_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe'
-    DOCKER_EXE  = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
+        // ============================================================
+        // Docker
+        // ============================================================
+        DOCKER_IMAGE = 'wifi-pytest-advanced'
 
-    // Jenkins-specific Kubernetes configuration
-    KUBECONFIG = 'C:\\ProgramData\\Jenkins\\.kube\\config'
+        // ============================================================
+        // Kubernetes / Kind
+        // ============================================================
+        KIND_CLUSTER = 'kind'
 
-    GITOPS_REPO        = 'https://github.com/i-am-vengatesh/WIFI_PYTEST_GITOPS.git'
-    GITOPS_CREDENTIALS = 'github-gitops-creds'
+        K8S_NAMESPACE = 'default'
 
-    K8S_JOB_NAME = "wifi-pytest-job-${BUILD_NUMBER}"
+        // IMPORTANT:
+        // Change this path ONLY if kind.exe is installed somewhere else.
+        KIND_EXE = 'C:\\Program Files\\kind\\kind.exe'
 
-    HTML_REPORT  = 'reports\\wlan_test_report.html'
-    JUNIT_REPORT = 'reports\\junit-results.xml'
-}
+        // ============================================================
+        // Kubernetes Job
+        // ============================================================
+        K8S_JOB_BASE = 'wifi-pytest-job'
+
+        // ============================================================
+        // GitOps manifest
+        // ============================================================
+        GITOPS_MANIFEST = 'k8s\\pytest-job.yaml'
+
+        // ============================================================
+        // Reports
+        // ============================================================
+        JUNIT_REPORT = 'reports\\k8s\\junit-results-k8s.xml'
+
+        HTML_REPORT = 'reports\\k8s\\wlan_test_report-k8s.html'
+    }
+
 
     stages {
 
-        // ============================================================
-        // 1. Clean Workspace
-        // ============================================================
-        stage('Clean Workspace') {
-            steps {
-                deleteDir()
-            }
-        }
 
         // ============================================================
-        // 2. Checkout Pytest Project
+        // 1. CHECKOUT APPLICATION SOURCE
         // ============================================================
-        stage('Checkout') {
+        stage('Checkout Source') {
+
             steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Checkout WIFI_PYTEST_ADVANCED'
+                echo '=========================================='
+
                 checkout scm
 
                 bat '''
+                    @echo off
+
                     echo.
-                    echo ==========================================
-                    echo Pytest Project Checkout
-                    echo ==========================================
+                    echo ===== Git Version =====
                     git --version
-                    git rev-parse --short HEAD
-                    git log -1 --oneline
+
+                    echo.
+                    echo ===== Current Commit =====
+                    git rev-parse HEAD
+
+                    echo.
+                    echo ===== Current Branch =====
+                    git branch --show-current
                 '''
             }
         }
 
+
         // ============================================================
-        // 3. Test GitOps Repository Access
+        // 2. VERIFY ENVIRONMENT
         // ============================================================
-        stage('Test GitOps Repository Access') {
+        stage('Verify Environment') {
+
             steps {
 
-                dir('gitops-test') {
+                echo ''
+                echo '=========================================='
+                echo 'Verify Environment'
+                echo '=========================================='
 
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[
-                            url: "${GITOPS_REPO}",
-                            credentialsId: "${GITOPS_CREDENTIALS}"
-                        ]]
-                    ])
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Docker Version =====
+                    docker --version
+
+                    echo.
+                    echo ===== Kind Version =====
+                    "%KIND_EXE%" version
+
+                    echo.
+                    echo ===== Kubectl Version =====
+                    kubectl version --client
+
+                    echo.
+                    echo ===== Docker Info =====
+                    docker info
+
+                    echo.
+                    echo ===== Kubernetes Context =====
+                    kubectl config current-context
+
+                    echo.
+                    echo ===== Kubernetes Nodes =====
+                    kubectl get nodes
+
+                    echo.
+                    echo ===== Python Version =====
+                    python --version
+                '''
+            }
+        }
+
+
+        // ============================================================
+        // 3. BUILD DOCKER IMAGE
+        // ============================================================
+        stage('Build Docker Image') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Build Docker Image'
+                echo '=========================================='
+
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Building Docker Image =====
+
+                    docker build ^
+                        -t %DOCKER_IMAGE%:%BUILD_NUMBER% ^
+                        .
+
+                    if errorlevel 1 (
+                        echo Docker build failed.
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Docker Image Created =====
+
+                    docker images %DOCKER_IMAGE%
+                '''
+            }
+        }
+
+
+        // ============================================================
+        // 4. GITOPS - CLONE REPOSITORY
+        // ============================================================
+        stage('Clone GitOps Repository') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Clone GitOps Repository'
+                echo '=========================================='
+
+                dir('gitops-repo') {
+
+                    deleteDir()
+
+                    withCredentials([
+                        gitUsernamePassword(
+                            credentialsId: "${GITOPS_CREDENTIALS}",
+                            gitToolName: 'git'
+                        )
+                    ]) {
+
+                        bat '''
+                            @echo off
+
+                            echo.
+                            echo ===== Cloning GitOps Repository =====
+
+                            git clone "%GITOPS_REPO%" .
+
+                            if errorlevel 1 (
+                                echo GitOps repository clone failed.
+                                exit /b 1
+                            )
+
+                            echo.
+                            echo ===== GitOps Repository =====
+
+                            git remote -v
+
+                            echo.
+                            echo ===== Git Branch =====
+
+                            git branch -a
+                        '''
+                    }
+                }
+            }
+        }
+
+
+        // ============================================================
+        // 5. VERIFY GITHUB CONNECTION
+        // ============================================================
+        stage('Verify GitOps Repository') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Verify GitOps Repository'
+                echo '=========================================='
+
+                dir('gitops-repo') {
+
+                    withCredentials([
+                        gitUsernamePassword(
+                            credentialsId: "${GITOPS_CREDENTIALS}",
+                            gitToolName: 'git'
+                        )
+                    ]) {
+
+                        bat '''
+                            @echo off
+
+                            echo.
+                            echo ===== Git Remote =====
+
+                            git remote -v
+
+                            echo.
+                            echo ===== Local Commit =====
+
+                            git rev-parse HEAD
+
+                            echo.
+                            echo ===== Remote Main =====
+
+                            git ls-remote origin refs/heads/main
+
+                            if errorlevel 1 (
+                                echo.
+                                echo GitHub connectivity/authentication failed.
+                                exit /b 1
+                            )
+
+                            echo.
+                            echo ==========================================
+                            echo GitHub Connectivity Successful
+                            echo ==========================================
+                        '''
+                    }
+                }
+            }
+        }
+
+
+        // ============================================================
+        // 6. UPDATE GITOPS MANIFEST
+        // ============================================================
+        stage('Update GitOps Manifest') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Update GitOps Manifest'
+                echo '=========================================='
+
+                dir('gitops-repo') {
 
                     bat '''
+                        @echo off
+
                         echo.
-                        echo ==========================================
-                        echo GitOps Repository Access Successful
-                        echo ==========================================
+                        echo ===== BEFORE UPDATE =====
+
+                        findstr /I "image:" "%GITOPS_MANIFEST%"
+
+                        echo.
+                        echo ===== Updating Image =====
+
+                        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+                        "(Get-Content '%GITOPS_MANIFEST%') -replace 'image: wifi-pytest-advanced:[^ ]+', 'image: wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content '%GITOPS_MANIFEST%'"
+
+                        if errorlevel 1 (
+                            echo Failed to update Kubernetes manifest.
+                            exit /b 1
+                        )
+
+                        echo.
+                        echo ===== AFTER UPDATE =====
+
+                        findstr /I "image:" "%GITOPS_MANIFEST%"
+
+                        echo.
+                        echo ===== Git Diff =====
+
+                        git diff -- "%GITOPS_MANIFEST%"
+                    '''
+                }
+            }
+        }
+
+
+        // ============================================================
+        // 7. COMMIT GITOPS CHANGE
+        // ============================================================
+        stage('Commit GitOps Changes') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Commit GitOps Changes'
+                echo '=========================================='
+
+                dir('gitops-repo') {
+
+                    bat '''
+                        @echo off
+
+                        git config user.name "Jenkins CI"
+                        git config user.email "jenkins@localhost"
+
+                        echo.
+                        echo ===== Git Status =====
+
+                        git status
+
+                        echo.
+                        echo ===== Git Add =====
+
+                        git add "%GITOPS_MANIFEST%"
+
+                        echo.
+                        echo ===== Git Commit =====
+
+                        git commit -m "Update Pytest image to build %BUILD_NUMBER%"
+
+                        if errorlevel 1 (
+                            echo.
+                            echo No changes to commit or commit failed.
+                            exit /b 1
+                        )
+
+                        echo.
+                        echo ===== New Commit =====
+
                         git log -1 --oneline
                     '''
                 }
             }
         }
 
+
         // ============================================================
-        // 4. Verify Environment / Kubernetes
+        // 8. PUSH GITOPS CHANGE
         // ============================================================
-        stage('Verify Environment') {
-            steps {
+        stage('Push GitOps Changes') {
 
-                bat '''
-                    echo.
-                    echo ==========================================
-                    echo Jenkins User
-                    echo ==========================================
-                    whoami
-
-                    echo.
-                    echo ==========================================
-                    echo Docker Version
-                    echo ==========================================
-                    "%DOCKER_EXE%" --version
-
-                    echo.
-                    echo ==========================================
-                    echo Kubectl Version
-                    echo ==========================================
-                    "%KUBECTL_EXE%" version --client
-
-                    echo.
-                    echo ==========================================
-                    echo Kind Version
-                    echo ==========================================
-                    "%KIND_EXE%" version
-
-                    echo.
-                    echo ==========================================
-                    echo Kubernetes Context
-                    echo ==========================================
-                    "%KUBECTL_EXE%" config current-context
-
-                    echo.
-                    echo ==========================================
-                    echo Kubernetes Nodes
-                    echo ==========================================
-                    "%KUBECTL_EXE%" get nodes -o wide
-
-                    echo.
-                    echo ==========================================
-                    echo Kubernetes Namespaces
-                    echo ==========================================
-                    "%KUBECTL_EXE%" get namespaces
-                '''
+            options {
+                timeout(time: 3, unit: 'MINUTES')
             }
-        }
 
-        // ============================================================
-        // 5. Build Docker Image
-        // ============================================================
-        stage('Build Docker Image') {
             steps {
 
-                bat '''
-                    echo.
-                    echo ==========================================
-                    echo Building Docker Image
-                    echo ==========================================
+                echo ''
+                echo '=========================================='
+                echo 'Pushing GitOps Changes'
+                echo '=========================================='
 
-                    "%DOCKER_EXE%" build ^
-                        -t %DOCKER_IMAGE%:%BUILD_NUMBER% ^
-                        -t %DOCKER_HUB_IMAGE%:%BUILD_NUMBER% ^
-                        .
-                '''
-            }
-        }
+                dir('gitops-repo') {
 
-        // ============================================================
-        // 6. Push Docker Image
-        // ============================================================
-        stage('Push Docker Image') {
-            steps {
+                    withCredentials([
+                        gitUsernamePassword(
+                            credentialsId: "${GITOPS_CREDENTIALS}",
+                            gitToolName: 'git'
+                        )
+                    ]) {
 
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
+                        bat '''
+                            @echo off
 
-                    bat '''
-                        echo.
-                        echo ==========================================
-                        echo Docker Hub Login
-                        echo ==========================================
+                            echo.
+                            echo ===== Git Remote =====
 
-                        echo %DOCKER_PASSWORD% | "%DOCKER_EXE%" login ^
-                            -u "%DOCKER_USERNAME%" ^
-                            --password-stdin
+                            git remote -v
 
-                        echo.
-                        echo ==========================================
-                        echo Pushing Docker Image
-                        echo ==========================================
+                            echo.
+                            echo ===== Local Commit =====
 
-                        "%DOCKER_EXE%" push ^
-                            %DOCKER_HUB_IMAGE%:%BUILD_NUMBER%
+                            git log -1 --oneline
 
-                        echo.
-                        echo ==========================================
-                        echo Docker Logout
-                        echo ==========================================
+                            echo.
+                            echo ===== Pushing GitOps Changes =====
 
-                        "%DOCKER_EXE%" logout
-                    '''
+                            set GIT_TERMINAL_PROMPT=0
+
+                            git push origin HEAD:main
+
+                            if errorlevel 1 (
+                                echo.
+                                echo ==========================================
+                                echo Git Push FAILED
+                                echo ==========================================
+                                exit /b 1
+                            )
+
+                            echo.
+                            echo ==========================================
+                            echo Git Push Successful
+                            echo ==========================================
+                        '''
+                    }
                 }
             }
         }
 
-        // ============================================================
-        // 7. Update GitOps Repository
-        // ============================================================
-        stage('Update GitOps Repository') {
-    steps {
-
-        dir('gitops-repo') {
-
-            checkout([
-                $class: 'GitSCM',
-                branches: [[name: '*/main']],
-                userRemoteConfigs: [[
-                    url: "${GITOPS_REPO}",
-                    credentialsId: "${GITOPS_CREDENTIALS}"
-                ]]
-            ])
-
-            bat '''
-                echo.
-                echo ==========================================
-                echo GitOps Repository Before Update
-                echo ==========================================
-                git log -1 --oneline
-
-                echo.
-                echo ==========================================
-                echo Updating Kubernetes Manifest
-                echo ==========================================
-
-                powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content 'k8s\\pytest-job.yaml') -replace 'wifi-pytest-job-[0-9]+', 'wifi-pytest-job-%BUILD_NUMBER%' -replace 'vengateshbabu1605/wifi-pytest-advanced:[0-9]+', 'vengateshbabu1605/wifi-pytest-advanced:%BUILD_NUMBER%' | Set-Content 'k8s\\pytest-job.yaml'"
-
-                if errorlevel 1 (
-                    echo ERROR: Failed to update Kubernetes manifest
-                    exit /b 1
-                )
-
-                echo.
-                echo ==========================================
-                echo Updated Manifest
-                echo ==========================================
-
-                type k8s\\pytest-job.yaml
-
-                echo.
-                echo ==========================================
-                echo Git Commit
-                echo ==========================================
-
-                git config user.name "Jenkins CI"
-                git config user.email "jenkins@localhost"
-
-                git add k8s\\pytest-job.yaml
-
-                git commit -m "Update Pytest image to build %BUILD_NUMBER%"
-            '''
-
-            withCredentials([
-                usernamePassword(
-                    credentialsId: "${GITOPS_CREDENTIALS}",
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_PASSWORD'
-                )
-            ]) {
-
-                bat '''
-                    echo.
-                    echo ==========================================
-                    echo Pushing GitOps Changes
-                    echo ==========================================
-
-                    set "GIT_ASKPASS=%WORKSPACE%\\git-askpass.bat"
-
-                    (
-                        echo @echo off
-                        echo echo %%~1 ^| findstr /I "Username" ^>nul
-                        echo if not errorlevel 1 ^(
-                        echo     echo %%GIT_USERNAME%%
-                        echo     exit /b 0
-                        echo ^)
-                        echo echo %%GIT_PASSWORD%%
-                    ) > "%GIT_ASKPASS%"
-
-                    git push origin HEAD:main
-
-                    set "PUSH_RESULT=%ERRORLEVEL%"
-
-                    del "%GIT_ASKPASS%" >nul 2>&1
-
-                    if not "%PUSH_RESULT%"=="0" (
-                        echo.
-                        echo ==========================================
-                        echo GitOps Push FAILED
-                        echo ==========================================
-                        exit /b %PUSH_RESULT%
-                    )
-
-                    echo.
-                    echo ==========================================
-                    echo GitOps Push Successful
-                    echo ==========================================
-                '''
-            }
-        }
-    }
-}
 
         // ============================================================
-        // 8. Load Docker Image into Kind
+        // 9. LOAD DOCKER IMAGE INTO KIND
         // ============================================================
         stage('Load Docker Image into Kind') {
+
             steps {
 
+                echo ''
+                echo '=========================================='
+                echo 'Load Docker Image into Kind'
+                echo '=========================================='
+
                 bat '''
+                    @echo off
+
                     echo.
-                    echo ==========================================
-                    echo Loading Docker Image into Kind
-                    echo ==========================================
+                    echo ===== Loading Image =====
 
                     "%KIND_EXE%" load docker-image ^
-                        %DOCKER_HUB_IMAGE%:%BUILD_NUMBER% ^
+                        %DOCKER_IMAGE%:%BUILD_NUMBER% ^
                         --name %KIND_CLUSTER%
+
+                    if errorlevel 1 (
+                        echo Failed to load Docker image into Kind.
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Verify Image Inside Kind =====
+
+                    docker exec %KIND_CLUSTER%-control-plane ^
+                        crictl images
                 '''
             }
         }
 
+
         // ============================================================
-        // 9. Prepare Kubernetes Job
+        // 10. PREPARE KUBERNETES JOB
         // ============================================================
         stage('Prepare Kubernetes Job') {
+
             steps {
 
+                echo ''
+                echo '=========================================='
+                echo 'Prepare Kubernetes Job'
+                echo '=========================================='
+
                 bat '''
-                    echo.
-                    echo ==========================================
-                    echo Preparing Kubernetes Job
-                    echo ==========================================
-
-                    "%KUBECTL_EXE%" delete job %K8S_JOB_NAME% ^
-                        -n %K8S_NAMESPACE% ^
-                        --ignore-not-found=true
+                    @echo off
 
                     echo.
-                    echo Applying GitOps Manifest
-                    echo ==========================================
+                    echo ===== Creating Reports Directory =====
 
-                    "%KUBECTL_EXE%" apply ^
-                        -f gitops-repo\\k8s\\pytest-job.yaml ^
-                        -n %K8S_NAMESPACE%
+                    if not exist reports\\k8s (
+                        mkdir reports\\k8s
+                    )
 
                     echo.
-                    echo Kubernetes Jobs
-                    echo ==========================================
+                    echo ===== Generate Kubernetes Job =====
 
-                    "%KUBECTL_EXE%" get jobs ^
-                        -n %K8S_NAMESPACE%
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+                    "$content = Get-Content 'k8s\\wifi-pytest-job.yaml' -Raw; ^
+                    $content = $content -replace 'name: wifi-pytest-job', 'name: wifi-pytest-job-%BUILD_NUMBER%'; ^
+                    $content = $content -replace 'image: wifi-pytest-advanced:[^ ]+', 'image: wifi-pytest-advanced:%BUILD_NUMBER%'; ^
+                    $content | Set-Content 'k8s\\wifi-pytest-job-generated.yaml'"
+
+                    if errorlevel 1 (
+                        echo Failed to generate Kubernetes Job YAML.
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Generated Job =====
+
+                    type k8s\\wifi-pytest-job-generated.yaml
                 '''
             }
         }
 
+
         // ============================================================
-        // 10. Run Pytest in Kubernetes
+        // 11. RUN PYTEST IN KUBERNETES
         // ============================================================
         stage('Run Pytest in Kubernetes') {
+
             steps {
 
-                bat '''
-                    echo.
-                    echo ==========================================
-                    echo Waiting for Kubernetes Job
-                    echo ==========================================
+                echo ''
+                echo '=========================================='
+                echo 'Run Pytest in Kubernetes'
+                echo '=========================================='
 
-                    "%KUBECTL_EXE%" wait ^
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Applying Kubernetes Job =====
+
+                    kubectl apply -f k8s\\wifi-pytest-job-generated.yaml
+
+                    if errorlevel 1 (
+                        echo Failed to create Kubernetes Job.
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Waiting for Job =====
+
+                    kubectl wait ^
                         --for=condition=complete ^
-                        job/%K8S_JOB_NAME% ^
-                        -n %K8S_NAMESPACE% ^
+                        job/wifi-pytest-job-%BUILD_NUMBER% ^
                         --timeout=10m
 
+                    if errorlevel 1 (
+                        echo.
+                        echo Kubernetes Job did not complete successfully.
+
+                        echo.
+                        echo ===== Job Status =====
+                        kubectl get job wifi-pytest-job-%BUILD_NUMBER%
+
+                        echo.
+                        echo ===== Pod Status =====
+                        kubectl get pods -l job-name=wifi-pytest-job-%BUILD_NUMBER%
+
+                        echo.
+                        echo ===== Job Logs =====
+                        kubectl logs job/wifi-pytest-job-%BUILD_NUMBER%
+
+                        exit /b 1
+                    )
+
                     echo.
-                    echo ==========================================
-                    echo Kubernetes Job Status
-                    echo ==========================================
+                    echo ===== Kubernetes Job Completed =====
 
-                    "%KUBECTL_EXE%" get job %K8S_JOB_NAME% ^
-                        -n %K8S_NAMESPACE%
+                    kubectl get job wifi-pytest-job-%BUILD_NUMBER%
 
                     echo.
-                    echo ==========================================
-                    echo Pod Status
-                    echo ==========================================
+                    echo ===== Pytest Logs =====
 
-                    "%KUBECTL_EXE%" get pods ^
-                        -n %K8S_NAMESPACE% ^
-                        -l job-name=%K8S_JOB_NAME%
-
-                    echo.
-                    echo ==========================================
-                    echo Pytest Logs
-                    echo ==========================================
-
-                    "%KUBECTL_EXE%" logs ^
-                        job/%K8S_JOB_NAME% ^
-                        -n %K8S_NAMESPACE%
+                    kubectl logs job/wifi-pytest-job-%BUILD_NUMBER%
                 '''
             }
         }
 
+
         // ============================================================
-        // 11. Collect Kubernetes Reports
+        // 12. CREATE REPORTS READER POD
+        // ============================================================
+        stage('Create Reports Reader') {
+
+            steps {
+
+                echo ''
+                echo '=========================================='
+                echo 'Create Reports Reader Pod'
+                echo '=========================================='
+
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Creating Reports Reader =====
+
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+                    "$content = Get-Content 'k8s\\reports-reader.yaml' -Raw; ^
+                    $content = $content -replace 'name: reports-reader', 'name: reports-reader-%BUILD_NUMBER%'; ^
+                    $content | Set-Content 'k8s\\reports-reader-generated.yaml'"
+
+                    kubectl apply -f k8s\\reports-reader-generated.yaml
+
+                    if errorlevel 1 (
+                        echo Failed to create reports reader.
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Waiting for Reports Reader =====
+
+                    kubectl wait ^
+                        --for=condition=Ready ^
+                        pod/reports-reader-%BUILD_NUMBER% ^
+                        --timeout=2m
+
+                    if errorlevel 1 (
+                        echo Reports reader did not become ready.
+                        kubectl get pod reports-reader-%BUILD_NUMBER%
+                        kubectl describe pod reports-reader-%BUILD_NUMBER%
+                        exit /b 1
+                    )
+
+                    echo.
+                    echo ===== Reports Reader Ready =====
+
+                    kubectl get pod reports-reader-%BUILD_NUMBER%
+                '''
+            }
+        }
+
+
+        // ============================================================
+        // 13. COLLECT KUBERNETES REPORTS
         // ============================================================
         stage('Collect Kubernetes Reports') {
+
             steps {
 
+                echo ''
+                echo '=========================================='
+                echo 'Collect Kubernetes Reports'
+                echo '=========================================='
+
                 bat '''
-                    echo.
-                    echo ==========================================
-                    echo Finding Completed Pod
-                    echo ==========================================
-
-                    "%KUBECTL_EXE%" get pods ^
-                        -n %K8S_NAMESPACE% ^
-                        -l job-name=%K8S_JOB_NAME% ^
-                        -o wide
+                    @echo off
 
                     echo.
-                    echo ==========================================
-                    echo Getting Pod Name
-                    echo ==========================================
+                    echo ===== Creating Local Report Directory =====
 
-                    for /f "tokens=1" %%P in ('"%KUBECTL_EXE%" get pods -n %K8S_NAMESPACE% -l job-name=%K8S_JOB_NAME% -o jsonpath="{.items[0].metadata.name}"') do (
-                        set "POD_NAME=%%P"
+                    if not exist reports\\k8s (
+                        mkdir reports\\k8s
                     )
 
-                    echo POD_NAME=%POD_NAME%
+                    echo.
+                    echo ===== Copying JUnit XML =====
+
+                    kubectl cp ^
+                        reports-reader-%BUILD_NUMBER%:/app/reports/junit-results.xml ^
+                        reports\\k8s\\junit-results-k8s.xml
+
+                    if errorlevel 1 (
+                        echo Failed to copy JUnit XML.
+                        exit /b 1
+                    )
 
                     echo.
-                    echo ==========================================
-                    echo Creating Reports Directory
-                    echo ==========================================
+                    echo ===== Copying HTML Report =====
 
-                    if not exist reports mkdir reports
+                    kubectl cp ^
+                        reports-reader-%BUILD_NUMBER%:/app/reports/wlan_test_report.html ^
+                        reports\\k8s\\wlan_test_report-k8s.html
 
-                    echo.
-                    echo ==========================================
-                    echo Copying JUnit XML
-                    echo ==========================================
-
-                    "%KUBECTL_EXE%" cp ^
-                        %K8S_NAMESPACE%/%POD_NAME%:/app/reports/junit-results.xml ^
-                        reports\\junit-results.xml
+                    if errorlevel 1 (
+                        echo Failed to copy HTML report.
+                        exit /b 1
+                    )
 
                     echo.
-                    echo ==========================================
-                    echo Copying HTML Report
-                    echo ==========================================
+                    echo ===== Reports Collected =====
 
-                    "%KUBECTL_EXE%" cp ^
-                        %K8S_NAMESPACE%/%POD_NAME%:/app/reports/wlan_test_report.html ^
-                        reports\\wlan_test_report.html
+                    dir reports\\k8s
                 '''
             }
         }
 
+
         // ============================================================
-        // 12. Verify Reports
+        // 14. VERIFY REPORTS
         // ============================================================
         stage('Verify Reports') {
+
             steps {
 
+                echo ''
+                echo '=========================================='
+                echo 'Verify Reports'
+                echo '=========================================='
+
                 bat '''
-                    echo.
-                    echo ==========================================
-                    echo Report Files
-                    echo ==========================================
-
-                    dir reports
+                    @echo off
 
                     echo.
-                    echo ==========================================
-                    echo JUnit XML
-                    echo ==========================================
+                    echo ===== JUnit XML =====
 
-                    if exist reports\\junit-results.xml (
-                        echo JUnit report found
-                    ) else (
-                        echo ERROR: JUnit report not found
+                    if not exist "%JUNIT_REPORT%" (
+                        echo JUnit report not found.
                         exit /b 1
                     )
 
-                    echo.
-                    echo ==========================================
-                    echo HTML Report
-                    echo ==========================================
+                    dir "%JUNIT_REPORT%"
 
-                    if exist reports\\wlan_test_report.html (
-                        echo HTML report found
-                    ) else (
-                        echo ERROR: HTML report not found
+                    echo.
+                    echo ===== HTML Report =====
+
+                    if not exist "%HTML_REPORT%" (
+                        echo HTML report not found.
                         exit /b 1
                     )
+
+                    dir "%HTML_REPORT%"
+
+                    echo.
+                    echo ===== Reports Verified Successfully =====
                 '''
+
+                junit 'reports/k8s/junit-results-k8s.xml'
             }
         }
     }
+
 
     // ================================================================
     // POST ACTIONS
@@ -518,14 +764,16 @@ pipeline {
 
         always {
 
+            echo ''
+            echo '=========================================='
+            echo 'Pipeline Post Actions'
+            echo '=========================================='
+
             script {
 
-                if (fileExists('reports/junit-results.xml')) {
+                if (fileExists('reports/k8s/junit-results-k8s.xml')) {
 
-                    junit(
-                        testResults: 'reports/junit-results.xml',
-                        allowEmptyResults: false
-                    )
+                    echo 'JUnit report available.'
 
                 } else {
 
@@ -534,45 +782,82 @@ pipeline {
             }
 
             archiveArtifacts(
-                artifacts: 'reports/*.html,reports/*.xml',
-                allowEmptyArchive: true
+                artifacts: 'reports/k8s/**/*',
+                allowEmptyArchive: true,
+                fingerprint: true
             )
         }
 
+
         success {
-            echo '''
-            ==========================================
-            PIPELINE SUCCESS
-            ==========================================
-            Pytest completed successfully.
-            Docker image pushed.
-            GitOps repository updated.
-            Kubernetes Job completed.
-            Reports collected.
-            ==========================================
-            '''
+
+            echo ''
+            echo '=========================================='
+            echo 'PIPELINE SUCCESS'
+            echo '=========================================='
+
+            echo ''
+            echo 'Build Number: %BUILD_NUMBER%'
+            echo 'Docker Image: %DOCKER_IMAGE%:%BUILD_NUMBER%'
+            echo 'Kubernetes Job: %K8S_JOB_BASE%-%BUILD_NUMBER%'
+            echo ''
+            echo 'GitOps repository updated.'
+            echo 'Argo CD should reconcile the new Git state.'
+            echo ''
         }
+
 
         failure {
-            echo '''
-            ==========================================
-            PIPELINE FAILED
-            ==========================================
-            Check the failed stage and Jenkins console log.
-            ==========================================
-            '''
+
+            echo ''
+            echo '=========================================='
+            echo 'PIPELINE FAILED'
+            echo '=========================================='
+
+            echo ''
+            echo 'Build Number: %BUILD_NUMBER%'
+            echo 'Check the failed stage above.'
+            echo ''
         }
+
 
         aborted {
-            echo '''
-            ==========================================
-            PIPELINE ABORTED
-            ==========================================
-            '''
+
+            echo ''
+            echo '=========================================='
+            echo 'PIPELINE ABORTED'
+            echo '=========================================='
         }
 
+
         cleanup {
-            cleanWs()
+
+            echo ''
+            echo '=========================================='
+            echo 'Cleanup'
+            echo '=========================================='
+
+            script {
+
+                bat '''
+                    @echo off
+
+                    echo.
+                    echo ===== Kubernetes Objects =====
+
+                    kubectl get jobs -o wide 2>nul
+
+                    echo.
+                    echo ===== Kubernetes Pods =====
+
+                    kubectl get pods -o wide 2>nul
+
+                    echo.
+                    echo ===== Workspace Cleanup =====
+                '''
+
+                deleteDir()
+            }
         }
     }
 }
