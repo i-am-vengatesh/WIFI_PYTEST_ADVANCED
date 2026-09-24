@@ -372,54 +372,34 @@ pipeline {
         // 7. COMMIT GITOPS CHANGES
         // ============================================================
         stage('Commit GitOps Changes') {
+    steps {
+        dir('gitops-repo') {
+            bat '''
+                echo ===== Git Status =====
+                git status
 
-            steps {
+                echo ===== Git Add =====
+                git add k8s\\pytest-job.yaml
 
-                echo ''
-                echo '=========================================='
-                echo 'Commit GitOps Changes'
-                echo '=========================================='
+                echo ===== Configure Git Identity =====
+                git config user.name "Jenkins CI"
+                git config user.email "jenkins@localhost"
 
-                dir("${GITOPS_DIR}") {
+                echo ===== Verify Git Identity =====
+                git config user.name
+                git config user.email
 
-                    bat '''
-                        @echo off
+                echo ===== Git Commit =====
+                git commit -m "Update image to build %BUILD_NUMBER%"
 
-                        echo.
-                        echo ===== Git Status =====
-
-                        git status
-
-                        echo.
-                        echo ===== Git Add =====
-
-                        git add "%GITOPS_MANIFEST%"
-
-                        if errorlevel 1 (
-                            echo ERROR: Git add failed.
-                            exit /b 1
-                        )
-
-                        echo.
-                        echo ===== Git Commit =====
-
-                        git commit ^
-                            -m "Update Pytest image to build %BUILD_NUMBER%"
-
-                        if errorlevel 1 (
-                            echo.
-                            echo ERROR: Git commit failed.
-                            exit /b 1
-                        )
-
-                        echo.
-                        echo ===== New Commit =====
-
-                        git log -1 --oneline
-                    '''
-                }
-            }
+                if errorlevel 1 (
+                    echo ERROR: Git commit failed.
+                    exit /b 1
+                )
+            '''
         }
+    }
+}
 
 
         // ============================================================
