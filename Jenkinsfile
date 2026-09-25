@@ -101,15 +101,18 @@ pipeline {
                     echo ===== Waiting for Extractor Pod =====
                     kubectl wait --for=condition=Ready pod/pvc-extractor --timeout=60s
 
-                    echo ===== Files Present on PVC =====
-                    kubectl exec pvc-extractor -- ls -la /app/reports
-
-                    echo ===== Copying Reports from PVC =====
-                    kubectl cp pvc-extractor:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
-                    kubectl cp pvc-extractor:/app/reports/junit-results.xml ./reports/junit-results.xml || echo Optional XML report missing, skipping...
+                    echo ===== Copying Entire Reports Directory =====
+                    kubectl cp pvc-extractor:/app/reports/. ./reports/
 
                     echo ===== Cleaning Up Helper Pod =====
                     kubectl delete pod pvc-extractor --ignore-not-found=true
+
+                    echo ===== Verifying Extracted Local Workspace Files =====
+                    dir reports
+
+                    if not exist reports\\wlan_test_report.html (
+                        echo ^<html^>^<body^>^<h1^>No HTML Report Generated^</h1^>^</body^>^</html^> > reports\\wlan_test_report.html
+                    )
                 '''
             }
         }
