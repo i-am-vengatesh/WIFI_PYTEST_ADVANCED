@@ -78,17 +78,15 @@ pipeline {
                     kubectl logs job/${JOB_NAME}
                 """
             }
-        }
-
-        stage('Extract Reports from PVC') {
+      stage('Extract Reports from PVC') {
             steps {
                 bat '''
                     @echo off
                     echo ===== Extracting Reports to Workspace =====
                     if not exist reports mkdir reports
 
-                    @rem Target pod by app label to avoid selector syntax errors
-                    for /f "tokens=*" %%i in ('kubectl get pods -l app=wifi-pytest --no-headers -o custom-columns=":metadata.name"') do set TEST_POD=%%i
+                    @rem Query pod specifically by Kubernetes default job-name label
+                    for /f "tokens=*" %%i in ('kubectl get pods -l batch.kubernetes.io/job-name^=%JOB_NAME% --no-headers -o custom-columns^=":metadata.name"') do set TEST_POD=%%i
 
                     echo Found Pod: %TEST_POD%
 
@@ -97,11 +95,15 @@ pipeline {
                         kubectl cp %TEST_POD%:/app/reports/junit-results.xml ./reports/junit-results.xml
                     ) else (
                         echo ERROR: Test pod not found to copy reports!
+                        echo Current pods in cluster:
+                        kubectl get pods -A
                         exit /b 1
                     )
                 '''
             }
-        }
+        }  }
+
+      
 
         stage('Cleanup Docker Storage') {
             steps {
