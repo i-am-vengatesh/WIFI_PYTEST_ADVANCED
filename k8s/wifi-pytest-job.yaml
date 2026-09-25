@@ -3,16 +3,15 @@ kind: Job
 metadata:
   name: wifi-pytest-job
 spec:
+  ttlSecondsAfterFinished: 30
   backoffLimit: 0
   template:
     spec:
       restartPolicy: Never
-
       containers:
         - name: pytest
           image: wifi-pytest-advanced:1.0
           imagePullPolicy: IfNotPresent
-
           command: ["python"]
           args:
             - "-m"
@@ -22,11 +21,9 @@ spec:
             - "--html=/app/reports/wlan_test_report.html"
             - "--self-contained-html"
             - "--junitxml=/app/reports/junit-results.xml"
-
           volumeMounts:
             - name: reports-volume
               mountPath: /app/reports
-
       volumes:
         - name: reports-volume
           persistentVolumeClaim:

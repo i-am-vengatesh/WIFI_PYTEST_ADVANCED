@@ -49,21 +49,38 @@ pipeline {
         stage('Execute Pytest in Kubernetes') {
             steps {
                 bat """
+                    @echo off
+                    echo ===== Cleaning Up Previous Kubernetes Jobs =====
+                    kubectl delete job ${JOB_NAME} --ignore-not-found=true
+                    
+                    echo ===== Generating Manifest for Build ${BUILD_NUMBER} =====
                     powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: ${JOB_NAME}' -replace 'image: wifi-pytest-advanced:1.0', 'image: ${IMAGE_NAME}:${BUILD_NUMBER}' | Set-Content k8s\\wifi-pytest-job-gen.yaml"
+                    
+                    echo ===== Applying Kubernetes Job =====
                     kubectl apply -f k8s\\wifi-pytest-job-gen.yaml
-                    kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=3m
+                    
+                    echo ===== Waiting for Test Execution =====
+                    kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
+                    
+                    echo ===== Test Logs =====
                     kubectl logs job/${JOB_NAME}
                 """
             }
         }
 
-        stage('Cleanup Old Artifacts') {
+        stage('Cleanup Docker Storage') {
             steps {
-                bat """
+                bat '''
                     docker container prune -f
                     docker image prune -f --filter "until=48h"
-                """
+                '''
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline run completed for Build #${BUILD_NUMBER}."
         }
     }
 }
