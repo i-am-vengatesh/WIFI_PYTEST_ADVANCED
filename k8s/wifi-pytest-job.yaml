@@ -2,29 +2,23 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: wifi-pytest-job
+  labels:
+    app: wifi-pytest
 spec:
-  ttlSecondsAfterFinished: 30
-  backoffLimit: 0
+  # Do NOT include ttlSecondsAfterFinished here so pod persists for report extraction
   template:
+    metadata:
+      labels:
+        app: wifi-pytest
     spec:
       restartPolicy: Never
       containers:
-        - name: pytest
+        - name: wifi-pytest-container
           image: wifi-pytest-advanced:1.0
-          imagePullPolicy: IfNotPresent
-          command: ["python"]
-          args:
-            - "-m"
-            - "pytest"
-            - "-v"
-            - "-s"
-            - "--html=/app/reports/wlan_test_report.html"
-            - "--self-contained-html"
-            - "--junitxml=/app/reports/junit-results.xml"
           volumeMounts:
-            - name: reports-volume
-              mountPath: /app/reports
+            - mountPath: /app/reports
+              name: reports-vol
       volumes:
-        - name: reports-volume
+        - name: reports-vol
           persistentVolumeClaim:
             claimName: wifi-pytest-reports-pvc
