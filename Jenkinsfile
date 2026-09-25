@@ -46,26 +46,26 @@ pipeline {
 
         stage('Build & Load Container') {
             steps {
-                bat """
-                    @echo off
-                    echo ===== Building Docker Image =====
-                    set RETRY_COUNT=0
-                    :build_loop
-                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
-                    if errorlevel 1 (
-                        set /a RETRY_COUNT+=1
-                        if %RETRY_COUNT% LSS 3 (
-                            echo WARNING: Docker build failed (network/DNS issue). Retrying in 10s... (%RETRY_COUNT%/3)
-                            timeout /t 10 /nobreak
-                            goto build_loop
-                        ) else (
-                            echo ERROR: Docker build failed after 3 attempts.
-                            exit /b 1
-                        )
-                    )
+                powershell """
+                    Write-Host "===== Building Docker Image ====="
+                    $buildSuccess = $false
+                    for (\$i=1; \$i -le 3; \$i++) {
+                        docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                        if (\$LASTEXITCODE -eq 0) {
+                            $buildSuccess = $true
+                            break
+                        }
+                        Write-Host "WARNING: Docker build attempt \$i failed. Retrying in 10s..."
+                        Start-Sleep -Seconds 10
+                    }
 
-                    echo ===== Loading Image into KinD Cluster =====
-                    "${KIND_BIN}" load docker-image ${IMAGE_NAME}:${BUILD_NUMBER}
+                    if (-not \$buildSuccess) {
+                        Write-Error "ERROR: Docker build failed after 3 attempts."
+                        exit 1
+                    }
+
+                    Write-Host "===== Loading Image into KinD Cluster ====="
+                    & "${KIND_BIN}" load docker-image ${IMAGE_NAME}:${BUILD_NUMBER}
                 """
             }
         }
