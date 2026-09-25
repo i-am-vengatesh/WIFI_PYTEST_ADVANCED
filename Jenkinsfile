@@ -51,6 +51,7 @@ pipeline {
                 bat """
                     @echo off
                     echo ===== Cleaning Up Previous Kubernetes Jobs =====
+                    kubectl delete job -l app=wifi-pytest --ignore-not-found=true
                     kubectl delete job ${JOB_NAME} --ignore-not-found=true
                     
                     echo ===== Generating Manifest for Build ${BUILD_NUMBER} =====
@@ -68,6 +69,29 @@ pipeline {
             }
         }
 
+        stage('Extract Reports from PVC') {
+            steps {
+                bat '''
+                    @echo off
+                    echo ===== Extracting Reports to Workspace =====
+                    if not exist reports mkdir reports
+
+                    @rem Launch temporary pod with mounted PVC to copy artifacts
+                    kubectl run report-copy-pod --image=busybox --restart=Never --overrides="{\\\"spec\\\":{\\\"volumes\\\":[{\\\"name\\\":\\\"reports-vol\\\",\\\"persistentVolumeClaim\\\":{\\\"claimName\\\":\\\"wifi-pytest-reports-pvc\\\"}}],\\\"containers\\\":[{\\\"name\\\":\\\"busybox\\\",\\\"image\\\":\\\"busybox\\\",\\\"command\\\":[\\\"sleep\\\",\\\"30\\\"],\\\"volumeMounts\\\":[{\\\"mountPath\\\":\\\"/app/reports\\\",\\\"name\\\":\\\"reports-vol\\\"}]}]}}"
+
+                    @rem Wait for pod readiness
+                    kubectl wait --for=condition=Ready pod/report-copy-pod --timeout=60s
+
+                    @rem Copy HTML & XML reports to workspace
+                    kubectl cp report-copy-pod:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
+                    kubectl cp report-copy-pod:/app/reports/junit-results.xml ./reports/junit-results.xml
+
+                    @rem Cleanup temporary pod
+                    kubectl delete pod report-copy-pod --ignore-not-found=true
+                '''
+            }
+        }
+
         stage('Cleanup Docker Storage') {
             steps {
                 bat '''
@@ -81,6 +105,26 @@ pipeline {
     post {
         always {
             echo "Pipeline run completed for Build #${BUILD_NUMBER}."
+        }
+        success {
+            echo "Publishing test results..."
+            
+            // Publish HTML Report via HTML Publisher Plugin
+            publishHTML(target: [
+                allowMissing: false,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'reports',
+                reportFiles: 'wlan_test_report.html',
+                reportName: 'Pytest WLAN Test Report',
+                reportTitles: 'WLAN Test Automation Execution'
+            ])
+
+            // Publish JUnit Test Trend
+            junit 'reports/junit-results.xml'
+        }
+        failure {
+            echo "Build #${BUILD_NUMBER} failed. Check Kubernetes pod logs or pipeline execution output."
         }
     }
 }
