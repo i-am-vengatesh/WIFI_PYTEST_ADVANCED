@@ -66,6 +66,13 @@ pipeline {
                     
                     echo ===== Waiting for Test Execution =====
                     kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
+                    if errorlevel 1 (
+                        echo ERROR: Job timed out or failed to complete! Printing Pod Diagnostics...
+                        kubectl get pods -l app=wifi-pytest
+                        kubectl describe pods -l app=wifi-pytest
+                        kubectl logs -l app=wifi-pytest --tail=100
+                        exit /b 1
+                    )
                     
                     echo ===== Test Logs =====
                     kubectl logs job/${JOB_NAME}
@@ -80,8 +87,8 @@ pipeline {
                     echo ===== Extracting Reports to Workspace =====
                     if not exist reports mkdir reports
 
-                    @rem Get the exact pod name created by this build's Job using JSONPath
-                    for /f "tokens=*" %%i in ('kubectl get pods --selector=job-name=%JOB_NAME% -o jsonpath="^{.items[0].metadata.name^}"') do set TEST_POD=%%i
+                    @rem Target pod by app label to avoid selector syntax errors
+                    for /f "tokens=*" %%i in ('kubectl get pods -l app=wifi-pytest --no-headers -o custom-columns=":metadata.name"') do set TEST_POD=%%i
 
                     echo Found Pod: %TEST_POD%
 
