@@ -29,9 +29,13 @@ pipeline {
         stage('Verify Infrastructure') {
             steps {
                 bat '''
+                    @echo off
+                    echo ===== Checking Kubernetes Context =====
                     kubectl config current-context
+                    
+                    echo ===== Applying PVC Manifest =====
                     if exist k8s\\pvc.yaml (
-                        kubectl apply -f k8s\\pvc.yaml
+                        kubectl apply -f k8s\\pvc.yaml --validate=false --request-timeout=30s
                     )
                 '''
             }
@@ -51,14 +55,14 @@ pipeline {
                 bat """
                     @echo off
                     echo ===== Cleaning Up Previous Kubernetes Jobs =====
-                    kubectl delete job -l app=wifi-pytest --ignore-not-found=true
-                    kubectl delete job ${JOB_NAME} --ignore-not-found=true
+                    kubectl delete job -l app=wifi-pytest --ignore-not-found=true --request-timeout=30s
+                    kubectl delete job ${JOB_NAME} --ignore-not-found=true --request-timeout=30s
                     
                     echo ===== Generating Manifest for Build ${BUILD_NUMBER} =====
                     powershell -Command "(Get-Content k8s\\wifi-pytest-job.yaml) -replace 'name: wifi-pytest-job', 'name: ${JOB_NAME}' -replace 'image: wifi-pytest-advanced:1.0', 'image: ${IMAGE_NAME}:${BUILD_NUMBER}' | Set-Content k8s\\wifi-pytest-job-gen.yaml"
                     
                     echo ===== Applying Kubernetes Job =====
-                    kubectl apply -f k8s\\wifi-pytest-job-gen.yaml
+                    kubectl apply -f k8s\\wifi-pytest-job-gen.yaml --validate=false --request-timeout=30s
                     
                     echo ===== Waiting for Test Execution =====
                     kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
@@ -76,7 +80,7 @@ pipeline {
                     echo ===== Extracting Reports to Workspace =====
                     if not exist reports mkdir reports
 
-                    @rem Get the exact pod name created by this build's Job
+                    @rem Get the exact pod name created by this build's Job using JSONPath
                     for /f "tokens=*" %%i in ('kubectl get pods --selector=job-name=%JOB_NAME% -o jsonpath="^{.items[0].metadata.name^}"') do set TEST_POD=%%i
 
                     echo Found Pod: %TEST_POD%
@@ -109,7 +113,6 @@ pipeline {
         success {
             echo "Publishing test results..."
             
-            // Publish HTML Report via HTML Publisher Plugin
             publishHTML(target: [
                 allowMissing: false,
                 alwaysLinkToLastBuild: true,
@@ -120,7 +123,6 @@ pipeline {
                 reportTitles: 'WLAN Test Automation Execution'
             ])
 
-            // Publish JUnit Test Trend
             junit 'reports/junit-results.xml'
         }
         failure {
