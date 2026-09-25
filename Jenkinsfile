@@ -54,14 +54,14 @@ pipeline {
             steps {
                 bat """
                     @echo off
-                    echo ===== Verifying API Connectivity After Image Load =====
+                    echo ===== Verifying API Connectivity =====
                     kubectl version --request-timeout=15s
                     if errorlevel 1 (
-                        echo WARNING: API server unresponsive after image load. Waiting 10s...
+                        echo WARNING: API server unresponsive. Waiting 10s...
                         timeout /t 10 /nobreak
                     )
 
-                    echo ===== Cleaning Up Previous Kubernetes Jobs =====
+                    echo ===== Cleaning Up Previous Jobs =====
                     kubectl delete job -l app=wifi-pytest --ignore-not-found=true --request-timeout=30s
                     kubectl delete job ${JOB_NAME} --ignore-not-found=true --request-timeout=30s
                     
@@ -75,7 +75,7 @@ pipeline {
                     kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
                     if errorlevel 1 (
                         echo ERROR: Job timed out or failed!
-                        kubectl get pods -l app=wifi-pytest
+                        kubectl get pods
                         kubectl describe job ${JOB_NAME}
                         exit /b 1
                     )
@@ -90,22 +90,23 @@ pipeline {
             steps {
                 bat '''
                     @echo off
-                    echo ===== Extracting Reports to Workspace =====
+                    echo ===== Extracting Reports via Helper Pod =====
                     if not exist reports mkdir reports
 
-                    @rem Get exact pod name using default job label
-                    for /f "tokens=*" %%i in ('kubectl get pods -l batch.kubernetes.io/job-name^=%JOB_NAME% --no-headers -o custom-columns^=":metadata.name"') do set TEST_POD=%%i
+                    kubectl delete pod pvc-extractor --ignore-not-found=true --request-timeout=15s
 
-                    echo Found Pod: %TEST_POD%
+                    echo ===== Starting Temporary Helper Pod =====
+                    kubectl run pvc-extractor --image=alpine --restart=Never --overrides="{\\"spec\\":{\\"volumes\\":[{\\"name\\":\\"vol\\",\\"persistentVolumeClaim\\":{\\"claimName\\":\\"wifi-pytest-reports-pvc\\"}}],\\"containers\\":[{\\"name\\":\\"extractor\\",\\"image\\":\\"alpine\\",\\"command\\":[\\"sleep\\",\\"120\\"],\\"volumeMounts\\":[{\\"mountPath\\":\\"/app/reports\\",\\"name\\":\\"vol\\"}]}]}}"
 
-                    if defined TEST_POD (
-                        kubectl cp %TEST_POD%:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
-                        kubectl cp %TEST_POD%:/app/reports/junit-results.xml ./reports/junit-results.xml
-                    ) else (
-                        echo ERROR: Test pod not found for %JOB_NAME%!
-                        kubectl get pods
-                        exit /b 1
-                    )
+                    echo ===== Waiting for Extractor Pod =====
+                    kubectl wait --for=condition=Ready pod/pvc-extractor --timeout=60s
+
+                    echo ===== Copying Reports from PVC =====
+                    kubectl cp pvc-extractor:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
+                    kubectl cp pvc-extractor:/app/reports/junit-results.xml ./reports/junit-results.xml
+
+                    echo ===== Cleaning Up Helper Pod =====
+                    kubectl delete pod pvc-extractor --ignore-not-found=true
                 '''
             }
         }
