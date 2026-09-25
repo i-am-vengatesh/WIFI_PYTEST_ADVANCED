@@ -67,10 +67,9 @@ pipeline {
                     echo ===== Waiting for Test Execution =====
                     kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
                     if errorlevel 1 (
-                        echo ERROR: Job timed out or failed to complete! Printing Pod Diagnostics...
-                        kubectl get pods -l app=wifi-pytest
-                        kubectl describe pods -l app=wifi-pytest
-                        kubectl logs -l app=wifi-pytest --tail=100
+                        echo ERROR: Job timed out or failed!
+                        kubectl get pods
+                        kubectl describe job ${JOB_NAME}
                         exit /b 1
                     )
                     
@@ -78,14 +77,16 @@ pipeline {
                     kubectl logs job/${JOB_NAME}
                 """
             }
-      stage('Extract Reports from PVC') {
+        }
+
+        stage('Extract Reports from PVC') {
             steps {
                 bat '''
                     @echo off
                     echo ===== Extracting Reports to Workspace =====
                     if not exist reports mkdir reports
 
-                    @rem Query pod specifically by Kubernetes default job-name label
+                    @rem Get exact pod name using default job label
                     for /f "tokens=*" %%i in ('kubectl get pods -l batch.kubernetes.io/job-name^=%JOB_NAME% --no-headers -o custom-columns^=":metadata.name"') do set TEST_POD=%%i
 
                     echo Found Pod: %TEST_POD%
@@ -94,16 +95,13 @@ pipeline {
                         kubectl cp %TEST_POD%:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
                         kubectl cp %TEST_POD%:/app/reports/junit-results.xml ./reports/junit-results.xml
                     ) else (
-                        echo ERROR: Test pod not found to copy reports!
-                        echo Current pods in cluster:
-                        kubectl get pods -A
+                        echo ERROR: Test pod not found for %JOB_NAME%!
+                        kubectl get pods
                         exit /b 1
                     )
                 '''
             }
-        }  }
-
-      
+        }
 
         stage('Cleanup Docker Storage') {
             steps {
