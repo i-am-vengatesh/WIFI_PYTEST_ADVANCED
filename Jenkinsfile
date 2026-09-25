@@ -11,7 +11,7 @@ pipeline {
     options {
         timeout(time: 15, unit: 'MINUTES')
         timestamps()
-        scmRetryCount(3)
+        retry(2)
     }
 
     stages {
@@ -23,7 +23,9 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                retry(3) {
+                    checkout scm
+                }
             }
         }
 
