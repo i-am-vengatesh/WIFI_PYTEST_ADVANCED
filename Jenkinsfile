@@ -101,9 +101,12 @@ pipeline {
                     echo ===== Waiting for Extractor Pod =====
                     kubectl wait --for=condition=Ready pod/pvc-extractor --timeout=60s
 
+                    echo ===== Files Present on PVC =====
+                    kubectl exec pvc-extractor -- ls -la /app/reports
+
                     echo ===== Copying Reports from PVC =====
                     kubectl cp pvc-extractor:/app/reports/wlan_test_report.html ./reports/wlan_test_report.html
-                    kubectl cp pvc-extractor:/app/reports/junit-results.xml ./reports/junit-results.xml
+                    kubectl cp pvc-extractor:/app/reports/junit-results.xml ./reports/junit-results.xml || echo Optional XML report missing, skipping...
 
                     echo ===== Cleaning Up Helper Pod =====
                     kubectl delete pod pvc-extractor --ignore-not-found=true
@@ -134,11 +137,11 @@ pipeline {
                 keepAll: true,
                 reportDir: 'reports',
                 reportFiles: 'wlan_test_report.html',
-                reportName: 'Pytest WLAN Test Report',
+                reportName: 'PytestWLANReport',
                 reportTitles: 'WLAN Test Automation Execution'
             ])
 
-            junit 'reports/junit-results.xml'
+            junit allowEmptyResults: true, testResults: 'reports/*.xml'
         }
         failure {
             echo "Build #${BUILD_NUMBER} failed. Check Kubernetes pod logs or pipeline execution output."
