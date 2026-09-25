@@ -48,11 +48,11 @@ pipeline {
             steps {
                 powershell """
                     Write-Host "===== Building Docker Image ====="
-                    $buildSuccess = $false
+                    \$buildSuccess = \$false
                     for (\$i=1; \$i -le 3; \$i++) {
                         docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
                         if (\$LASTEXITCODE -eq 0) {
-                            $buildSuccess = $true
+                            \$buildSuccess = \$true
                             break
                         }
                         Write-Host "WARNING: Docker build attempt \$i failed. Retrying in 10s..."
