@@ -54,6 +54,13 @@ pipeline {
             steps {
                 bat """
                     @echo off
+                    echo ===== Verifying API Connectivity After Image Load =====
+                    kubectl version --request-timeout=15s
+                    if errorlevel 1 (
+                        echo WARNING: API server unresponsive after image load. Waiting 10s...
+                        timeout /t 10 /nobreak
+                    )
+
                     echo ===== Cleaning Up Previous Kubernetes Jobs =====
                     kubectl delete job -l app=wifi-pytest --ignore-not-found=true --request-timeout=30s
                     kubectl delete job ${JOB_NAME} --ignore-not-found=true --request-timeout=30s
@@ -68,7 +75,7 @@ pipeline {
                     kubectl wait --for=condition=complete job/${JOB_NAME} --timeout=5m
                     if errorlevel 1 (
                         echo ERROR: Job timed out or failed!
-                        kubectl get pods
+                        kubectl get pods -l app=wifi-pytest
                         kubectl describe job ${JOB_NAME}
                         exit /b 1
                     )
