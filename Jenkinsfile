@@ -44,7 +44,24 @@ pipeline {
         stage('Build & Load Container') {
             steps {
                 bat """
+                    @echo off
+                    echo ===== Building Docker Image =====
+                    set RETRY_COUNT=0
+                    :build_loop
                     docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                    if errorlevel 1 (
+                        set /a RETRY_COUNT+=1
+                        if %RETRY_COUNT% LSS 3 (
+                            echo WARNING: Docker build failed (network/DNS issue). Retrying in 10s... (%RETRY_COUNT%/3)
+                            timeout /t 10 /nobreak
+                            goto build_loop
+                        ) else (
+                            echo ERROR: Docker build failed after 3 attempts.
+                            exit /b 1
+                        )
+                    )
+
+                    echo ===== Loading Image into KinD Cluster =====
                     "${KIND_BIN}" load docker-image ${IMAGE_NAME}:${BUILD_NUMBER}
                 """
             }
